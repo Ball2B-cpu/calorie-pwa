@@ -448,6 +448,25 @@ test('validator ปฏิเสธ kcal 3000 / items ว่าง / conf=5 แ�
   assert(rSum.value && rSum.value.kcal === 200, `ต้องใช้ Σitems=200 ได้ ${rSum.value && rSum.value.kcal}`);
 });
 
+test('applyFoodTable: คูณจากตารางเอง + เลขที่ผู้ใช้พิมพ์ชนะ (เคสมื้อเช้า 13 ก.ย.)', () => {
+  const foods = [
+    { id: 'rice_100', kcal: 168, p: 2.5, g: 100, src: 'std' },
+    { id: 'maguro_kiriotoshi', kcal: 105, p: 21.0, g: 84, src: 'label' },
+    { id: 'gari', kcal: 10, p: 0.1, g: 50, src: 'label' },
+  ];
+  const out = net.applyFoodTable(estMeal({ items: [
+    estItem({ name: 'ข้าวสวย', foodId: 'rice_100', grams: 150, userKcal: 0, kcal: 201, p: 3 }),
+    estItem({ name: 'まぐろ', foodId: 'maguro_kiriotoshi', grams: 100, userKcal: 0, kcal: 119, p: 23.8 }),
+    estItem({ name: 'ขิงดอง', foodId: 'gari', grams: 50, userKcal: 11, kcal: 10, p: 0.1 }),
+    estItem({ name: 'ปูอัด', foodId: '', grams: 40, userKcal: 0, kcal: 36, p: 4.8 }),
+  ], kcal: 366, p: 31.7 }), foods);
+  const k = out.items.map((x) => x.kcal);
+  assert(k[0] === 252 && k[1] === 125 && k[2] === 11 && k[3] === 36, `ได้ ${k}`);
+  assert(out.kcal === 424, `รวมต้อง 424 ได้ ${out.kcal}`);
+  const v = net.validateEstimate(out);
+  assert(v.ok && v.value.kcal === 424 && v.value.items[0].grams === 150, 'ผ่าน validator แล้วเลขต้องคงเดิม');
+});
+
 test('syncMerge: est ของ AI ไม่หายตอนดันขึ้น GitHub และ final ของ Claude ไม่ถูกทับ', () => {
   const remote = baseDay({ rev: 3, meals: [{ id: 'm1', raw: ['ข้าว'], final: { kcal: 610 } }] });
   const local = baseDay({ rev: 2, body: { weight: 90.1 }, meals: [{ id: 'm1', raw: ['ข้าว'], est: { kcal: 500 }, final: { kcal: 1 } }],

@@ -457,7 +457,7 @@ function paintGauge(d, eaten) {
     tickLL.style.left = limPct + '%';
     tickLL.textContent = 'ลิมิต ' + p.limit.toLocaleString('en-US');
     tickLL.classList.toggle('up', tight);
-    if (tight) tickLL.style.transform = 'translateX(-50%)';
+    if (tight) tickLL.style.transform = 'translateX(calc(-100% - 5px))'; // ขึ้นแถวบนแล้วต้องหลบเส้นขีด ไม่งั้นเส้นทับตัวเลข (ไอโฟน 13 ก.ย.)
     else if (limPct < 18) tickLL.style.transform = 'translateX(0)';
     else if (limPct > 82) tickLL.style.transform = 'translateX(-100%)';
     else tickLL.style.transform = 'translateX(-50%)';

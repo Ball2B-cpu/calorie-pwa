@@ -4,7 +4,7 @@
    - คำขอข้ามโดเมนอื่น (openrouter.ai / api.github.com) และคำขอที่ไม่ใช่ GET ไม่ถูกแตะเลย
      → ไม่มีทางได้คำตอบจากแคชมาหลอกว่าส่งสำเร็จ
    ⚠️ แก้ไฟล์ใดที่อยู่ใน SHELL ต้องเปลี่ยน VERSION ด้วยทุกครั้ง */
-const VERSION = 'cal-v8';
+const VERSION = 'cal-v9';
 const SHELL = [
   './',
   './index.html',

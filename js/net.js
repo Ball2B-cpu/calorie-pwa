@@ -57,7 +57,10 @@ const SYSTEM_PROMPT = `คุณประมาณแคลอรีและโ
 บริบท: อาหารไทยและญี่ปุ่นของคนไทยที่ทำงานในญี่ปุ่น
 หน่วยที่ใช้จริง: ทัพพี (80 g) · ชต. · ชช. · ฟอง · ลูก
 
-ถ้ารายการตรงกับตารางอาหารด้านล่าง ต้องใช้ค่าในตาราง แล้วตอบ basis:"label" หรือ "std" ห้ามคิดเลขใหม่
+ถ้ารายการตรงกับตารางอาหารด้านล่าง ใส่ foodId = id ในตาราง และ grams = กรัมที่กินจริง (ผู้ใช้พิมพ์กรัมมา ใช้ตามนั้นเป๊ะ · ไม่ได้บอก ประมาณจากรูป/หน่วยในตาราง) ตอบ basis:"label" หรือ "std" — แอพจะคูณเลขจากตารางเอง
+ถ้าผู้ใช้พิมพ์แคลของรายการนั้นมาเอง (เช่น "11 กิโลแคล") ใส่ userKcal = เลขนั้น ไม่พิมพ์ = 0
+รายการที่ไม่มีในตาราง: foodId "" · grams ประมาณ · kcal/p ประมาณจากความรู้อาหารทั่วไป basis "guess"
+ห้ามให้ kcal 0 กับของที่มีพลังงานจริง (เช่น ปูอัด/カニカマ ~90 kcal ต่อ 100 g) — ไม่เห็นปริมาณให้ประมาณจากรูปแล้วใส่ conf ต่ำ
 
 ตารางอาหาร:
 {{FOOD_TABLE}}
@@ -67,7 +70,7 @@ const SYSTEM_PROMPT = `คุณประมาณแคลอรีและโ
 ถ้ามีฉลากในรูป (ญี่ปุ่น) ให้อ่านค่าจากฉลากเป็นหลัก และคูณตามปริมาณที่กินจริง
 
 schema ผลลัพธ์:
-{"items":[{"name":"","qty":"","kcal":0,"p":0,"conf":0.0,"basis":"label|std|guess","needLabel":false}],"kcal":0,"p":0,"confidence":0.0,"warnings":[],"unclear":[]}`;
+{"items":[{"name":"","qty":"","foodId":"","grams":0,"userKcal":0,"kcal":0,"p":0,"conf":0.0,"basis":"label|std|guess","needLabel":false}],"kcal":0,"p":0,"confidence":0.0,"warnings":[],"unclear":[]}`;
 
 const ESTIMATE_JSON_SCHEMA = {
   name: 'meal_estimate',
@@ -84,13 +87,16 @@ const ESTIMATE_JSON_SCHEMA = {
           properties: {
             name: { type: 'string' },
             qty: { type: 'string' },
+            foodId: { type: 'string' },
+            grams: { type: 'number' },
+            userKcal: { type: 'number' },
             kcal: { type: 'number' },
             p: { type: 'number' },
             conf: { type: 'number' },
             basis: { type: 'string', enum: ['label', 'std', 'guess'] },
             needLabel: { type: 'boolean' },
           },
-          required: ['name', 'qty', 'kcal', 'p', 'conf', 'basis', 'needLabel'],
+          required: ['name', 'qty', 'foodId', 'grams', 'userKcal', 'kcal', 'p', 'conf', 'basis', 'needLabel'],
         },
       },
       kcal: { type: 'number' },
@@ -246,6 +252,41 @@ function matchFoods(raw, foods) {
   return out;
 }
 
+/**
+ * คิดเลขจากตารางด้วยโค้ด ไม่ให้โมเดลคูณเอง (13 ก.ย.: ข้าว 150 g ได้ 201 แทน 252, ขิงดองที่บอลพิมพ์ 11 kcal ได้ 10)
+ * ลำดับ: userKcal ที่ผู้ใช้พิมพ์ > ตาราง (foodId × grams/g) > ค่าที่โมเดลประมาณ
+ * รวม kcal/p ของมื้อคิดใหม่จากรายการเสมอ
+ */
+export function applyFoodTable(raw, foods) {
+  if (!raw || typeof raw !== 'object' || !Array.isArray(raw.items)) return raw;
+  const list = Array.isArray(foods) ? foods : (foods && Array.isArray(foods.foods) ? foods.foods : []);
+  const byId = new Map(list.filter((f) => f && f.id).map((f) => [String(f.id), f]));
+  let changed = false;
+  const items = raw.items.map((it0) => {
+    const it = { ...(it0 || {}) };
+    const f = it.foodId ? byId.get(String(it.foodId)) : null;
+    const grams = Number(it.grams);
+    const perG = f && Number(f.g) > 0 ? 1 / Number(f.g) : 0;
+    if (f && perG && grams > 0) {
+      it.kcal = Math.round(Number(f.kcal) * grams * perG);
+      it.p = Math.round(Number(f.p) * grams * perG * 10) / 10;
+      it.basis = f.src === 'label' ? 'label' : 'std';
+      changed = true;
+    }
+    const uk = Number(it.userKcal);
+    if (Number.isFinite(uk) && uk > 0) {
+      it.kcal = uk;
+      it.basis = 'label';
+      changed = true;
+    }
+    return it;
+  });
+  if (!changed) return raw;
+  const sumK = items.reduce((s, x) => s + (Number(x.kcal) || 0), 0);
+  const sumP = items.reduce((s, x) => s + (Number(x.p) || 0), 0);
+  return { ...raw, items, kcal: sumK, p: Math.round(sumP * 10) / 10 };
+}
+
 function buildSystem(foodTableJson, extra) {
   let sys = SYSTEM_PROMPT.replace('{{FOOD_TABLE}}', foodTableJson || '(ไม่มีรายการที่ตรง)');
   if (extra) sys += '\n' + extra;
@@ -311,6 +352,9 @@ export function validateEstimate(raw) {
     items.push({
       name: String(it.name || ''),
       qty: it.qty == null ? '' : String(it.qty),
+      foodId: it.foodId ? String(it.foodId) : '',
+      grams: Number.isFinite(Number(it.grams)) && Number(it.grams) > 0 ? Number(it.grams) : 0,
+      userKcal: Number.isFinite(Number(it.userKcal)) && Number(it.userKcal) > 0 ? Number(it.userKcal) : 0,
       kcal,
       p,
       conf,
@@ -583,7 +627,7 @@ export async function estimateMeal({ date, mealId, raw, photoBlobs, foods }) {
       }
       const content = extractContent(text);
       const parsed = parseJsonContent(content);
-      const checked = validateEstimate(parsed);
+      const checked = validateEstimate(applyFoodTable(parsed, foodSrc));
       if (!checked.ok) {
         throw new NetError(`ผล AI ไม่ผ่านตัวตรวจ: ${checked.error}`, { raw: typeof content === 'string' ? content : JSON.stringify(parsed) });
       }
