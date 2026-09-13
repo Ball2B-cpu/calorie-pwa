@@ -615,7 +615,13 @@ async function ghRequest(url, opts) {
     throw new NetError('ถูกจำกัดอัตราการเรียก GitHub — จะลองใหม่ทีหลัง', { status: 403, stopRound: true, code: 'rate' });
   }
   if (res.status === 401 || res.status === 402 || res.status === 403) {
-    throw authError('gh', res.status);
+    // แนบข้อความจริงของ GitHub + method/path — 403 มีหลายสาเหตุ (สิทธิ์ / secondary rate limit / repo ถูกล็อก)
+    // เดิมทิ้งข้อความไป บอลเจอ 403 ทั้งที่ token ถูกต้องแล้ววินิจฉัยไม่ได้ (13 ก.ย.)
+    const err = authError('gh', res.status);
+    const gm = parseErrMsg(text);
+    const where = `${(opts && opts.method) || 'GET'} ${String(url).replace(GH_API, '').split('?')[0]}`;
+    err.message += ` [${res.status} ${where}${gm ? ' · ' + gm : ''}]`;
+    throw err;
   }
   const rate = lookRate(res);
   if (rate && res.status !== 404) throw rate;
