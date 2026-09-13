@@ -31,11 +31,15 @@ import * as ui from './ui.js';
    ราคาต่อรูป (prompt ~1.5k tok + out ~700 tok): flash-lite $0.00043 · qwen3-vl-32b $0.00045 · luna $0.00114
    → ใช้ 4 มื้อ/วัน ≈ $0.06/เดือน (เครดิต $3 อยู่ได้หลายปี)
    ผู้ใช้แก้ลิสต์นี้เองได้จากหน้าตั้งค่า (localStorage cal.ai_models) โดยไม่ต้อง deploy ใหม่ */
+/* 13 ก.ย.: บอลเลือกเปลี่ยนตัวหลักเป็น gemini-3.8-flash — flash-lite อ่านฉลากญี่ปุ่นในรูปพลาด (ปูอัด 69 kcal/100g)
+   ราคา $0.75/$3.75 ต่อ 1M tok ≈ $0.005/มื้อ ≈ $0.6/เดือน · ตัวถูกเก็บไว้เป็น fallback */
 export const DEFAULT_MODELS = [
+  'google/gemini-3.8-flash',
   'google/gemini-2.5-flash-lite',
   'qwen/qwen3-vl-32b-instruct',
-  'openai/gpt-5.6-luna',
 ];
+// ลิสต์ default ชุดเก่า — ถ้าในเครื่องบันทึกไว้ตรงชุดนี้เป๊ะ ถือว่าไม่ได้ตั้งเอง ให้ใช้ default ใหม่
+export const OLD_DEFAULT_MODELS = ['google/gemini-2.5-flash-lite', 'qwen/qwen3-vl-32b-instruct', 'openai/gpt-5.6-luna'];
 
 export const OR_URL = 'https://openrouter.ai/api/v1/chat/completions';
 export const GH_API = 'https://api.github.com';
@@ -225,7 +229,7 @@ function readModels() {
   if (raw) {
     try {
       const p = JSON.parse(raw);
-      if (Array.isArray(p) && p.length) return p.map(String).map((s) => s.trim()).filter(Boolean);
+      if (Array.isArray(p) && p.length && JSON.stringify(p) !== JSON.stringify(OLD_DEFAULT_MODELS)) return p.map(String).map((s) => s.trim()).filter(Boolean);
     } catch (_) {}
   }
   return DEFAULT_MODELS.slice();

@@ -1605,7 +1605,8 @@ function saveModels() {
   const ta = $('sAiModels');
   if (!ta) return;
   const list = String(ta.value || '').split(/\r?\n/).map((s) => s.trim()).filter(Boolean);
-  setLs(LS_MODELS, list.length ? JSON.stringify(list) : '');
+  const isDefault = JSON.stringify(list) === JSON.stringify(net.DEFAULT_MODELS || []);
+  setLs(LS_MODELS, list.length && !isDefault ? JSON.stringify(list) : '');
 }
 
 function readModels() {
@@ -1613,7 +1614,7 @@ function readModels() {
   if (raw) {
     try {
       const p = JSON.parse(raw);
-      if (Array.isArray(p) && p.length) return p.map(String);
+      if (Array.isArray(p) && p.length && JSON.stringify(p) !== JSON.stringify(net.OLD_DEFAULT_MODELS || [])) return p.map(String);
     } catch (_) {}
   }
   return (net.DEFAULT_MODELS || []).slice();
