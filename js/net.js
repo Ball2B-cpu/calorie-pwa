@@ -925,7 +925,8 @@ async function runAiJob(job) {
   const errors = [];
   for (const meal of meals) {
     const sig = mealSig(meal);
-    if (meal.final && Number.isFinite(Number(meal.final.kcal))) continue;
+    // final ที่มี sig ไม่ตรง = บอลแก้มื้อหลัง Claude ยืนยัน -> คิดใหม่ (เดิมข้ามเสมอ กดส่งแล้วเงียบ 13 ก.ย.)
+    if (meal.final && Number.isFinite(Number(meal.final.kcal)) && (!meal.final.sig || meal.final.sig === sig)) continue;
     if (meal.est && meal.est.sig === sig) continue;
     try {
       if (isNotEaten(meal)) {

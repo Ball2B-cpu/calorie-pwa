@@ -145,12 +145,22 @@ function itemNums(it) {
   return null;
 }
 
+/** final ที่ยังตรงกับข้อความ/รูปปัจจุบัน (sig เดียวกับ mealSig ใน net.js) · ไม่มี sig = ของเก่า ถือว่าใช้ได้ */
+function freshFinal(m) {
+  const fin = layer(m && m.final);
+  if (!fin) return null;
+  if (m.final.sig && m.final.sig !== JSON.stringify([m.raw || [], m.photos || []])) return null;
+  return fin;
+}
+
 function mealNums(m) {
   if (!m) return { kcal: 0, p: 0, est: false };
-  const fin = layer(m.final);
+  const fin = freshFinal(m);
   if (fin) return { ...fin, est: false };
   const est = layer(m.est);
   if (est) return { ...est, est: true };
+  const stale = layer(m.final);
+  if (stale) return { ...stale, est: true };
   let kcal = 0, p = 0, any = false, usedEst = false;
   for (const it of m.items || []) {
     const n = itemNums(it);
@@ -321,7 +331,8 @@ function showEstDetail(d) {
 
 function mealHasFinal(m) {
   if (!m) return false;
-  if (layer(m.final)) return true;
+  if (freshFinal(m)) return true;
+  if (layer(m.final)) return false;
   const items = m.items || [];
   if (!items.length) return false;
   return items.every((it) => layer(it && it.final));
@@ -329,7 +340,7 @@ function mealHasFinal(m) {
 
 function mealHasEstNum(m) {
   if (!m) return false;
-  if (layer(m.est) && !layer(m.final)) return true;
+  if ((layer(m.est) || layer(m.final)) && !freshFinal(m)) return true;
   for (const it of m.items || []) {
     if (it && layer(it.est) && !layer(it.final)) return true;
   }
