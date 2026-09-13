@@ -1,0 +1,873 @@
+{
+ "v": 1,
+ "note": "ค่าโภชนาการจากฉลากสินค้า/ค่ามาตรฐาน — ไม่มีข้อมูลส่วนบุคคล",
+ "foods": [
+  {
+   "id": "quaker_oat",
+   "name": "ข้าวโอ๊ต Quaker Instant Oatmeal",
+   "unit": "1 ที่ = 35 g",
+   "kcal": 141,
+   "p": 4.3,
+   "src": "label",
+   "alias": [
+    "โอ๊ต",
+    "oat",
+    "ข้าวโอ๊ต"
+   ],
+   "g": 35
+  },
+  {
+   "id": "pasco_chojuku",
+   "name": "ขนมปัง Pasco 超熟 8枚切り",
+   "unit": "1 แผ่น",
+   "kcal": 123,
+   "p": 3.7,
+   "src": "label",
+   "alias": [
+    "ขนมปัง",
+    "pasco",
+    "超熟"
+   ]
+  },
+  {
+   "id": "pasco_rye",
+   "name": "ขนมปัง Pasco ライ麦入り",
+   "unit": "1 แผ่น = 63.3 g",
+   "kcal": 152,
+   "p": 5.7,
+   "src": "label",
+   "alias": [
+    "ขนมปังไรย์",
+    "rye",
+    "ライ麦"
+   ],
+   "g": 63.3,
+   "salt": 0.7
+  },
+  {
+   "id": "kanpy_pb",
+   "name": "เนยถั่ว Kanpy Chunk",
+   "unit": "1 ชช. = 7 g",
+   "kcal": 43,
+   "p": 1.4,
+   "src": "label",
+   "alias": [
+    "เนยถั่ว",
+    "peanut butter"
+   ],
+   "g": 7
+  },
+  {
+   "id": "kanpy_pb_tbsp",
+   "name": "เนยถั่ว Kanpy Chunk",
+   "unit": "1 ชต. = 20 g",
+   "kcal": 128,
+   "p": 4.3,
+   "src": "label",
+   "alias": [
+    "เนยถั่ว ชต"
+   ],
+   "g": 20
+  },
+  {
+   "id": "raisin",
+   "name": "ลูกเกด",
+   "unit": "100 g",
+   "kcal": 340,
+   "p": 3.5,
+   "src": "label",
+   "alias": [
+    "ลูกเกด",
+    "raisin"
+   ],
+   "g": 100
+  },
+  {
+   "id": "soymilk_chosei",
+   "name": "นมถั่วเหลือง キッコーマン 調製豆乳",
+   "unit": "200 ml",
+   "kcal": 74,
+   "p": 5.8,
+   "src": "label",
+   "alias": [
+    "นมถั่วเหลือง",
+    "調製豆乳"
+   ],
+   "g": 200
+  },
+  {
+   "id": "soymilk_mucho",
+   "name": "นมถั่วเหลือง 無調整 CGC (大豆固形分 9%)",
+   "unit": "200 ml",
+   "kcal": 103,
+   "p": 9.2,
+   "src": "label",
+   "alias": [
+    "นมถั่วเหลือง 無調整",
+    "無調整豆乳"
+   ],
+   "g": 200,
+   "salt": 0.03
+  },
+  {
+   "id": "fauchon_veg",
+   "name": "ผงปรุง FAUCHON 温野菜用",
+   "unit": "1 ซอง = 6.3 g",
+   "kcal": 21,
+   "p": 0.7,
+   "src": "label",
+   "alias": [
+    "FAUCHON",
+    "ผงปรุงผัก"
+   ],
+   "g": 6.3,
+   "salt": 1.6
+  },
+  {
+   "id": "sriracha",
+   "name": "ซอสศรีราชา",
+   "unit": "1 ชต. = 17 g",
+   "kcal": 15,
+   "p": 0.0,
+   "src": "label",
+   "alias": [
+    "ศรีราชา",
+    "sriracha"
+   ],
+   "g": 17,
+   "salt": 0.95
+  },
+  {
+   "id": "shoyu_kikkoman",
+   "name": "ซีอิ๊วญี่ปุ่น キッコーマン",
+   "unit": "1 ชต. = 15 ml",
+   "kcal": 18,
+   "p": 1.7,
+   "src": "label",
+   "alias": [
+    "ซีอิ๊ว",
+    "โชยุ",
+    "醤油"
+   ],
+   "g": 15,
+   "salt": 2.1
+  },
+  {
+   "id": "gari",
+   "name": "ขิงดอง がり CGC",
+   "unit": "1 ถุง = 50 g",
+   "kcal": 10,
+   "p": 0.1,
+   "src": "label",
+   "alias": [
+    "ขิงดอง",
+    "がり"
+   ],
+   "g": 50,
+   "salt": 1.1
+  },
+  {
+   "id": "beni_shoga",
+   "name": "紅生姜 ขิงแดงซอย",
+   "unit": "100 g",
+   "kcal": 20,
+   "p": 0.5,
+   "src": "label",
+   "alias": [
+    "ขิงแดง",
+    "紅生姜"
+   ],
+   "g": 100,
+   "salt": 6.1
+  },
+  {
+   "id": "salmon_raw",
+   "name": "แซลมอนดิบ (ノルウェー産 養殖)",
+   "unit": "100 g ดิบ",
+   "kcal": 218,
+   "p": 20.0,
+   "src": "label",
+   "alias": [
+    "แซลมอน",
+    "salmon",
+    "サーモン"
+   ],
+   "g": 100
+  },
+  {
+   "id": "house_cuc",
+   "name": "ผงยำแตงกวา ハウス 野菜用調味料",
+   "unit": "1 ซอง = 6 g",
+   "kcal": 16,
+   "p": 0.9,
+   "src": "label",
+   "alias": [
+    "ผงยำแตงกวา"
+   ],
+   "g": 6,
+   "salt": 2.0
+  },
+  {
+   "id": "maguro_kiriotoshi",
+   "name": "まぐろ切落し (鉄火)",
+   "unit": "1 แพ็ค = 84 g",
+   "kcal": 105,
+   "p": 21.0,
+   "src": "label",
+   "alias": [
+    "ทูน่า",
+    "มากุโระ",
+    "まぐろ"
+   ],
+   "g": 84
+  },
+  {
+   "id": "honey_nuts",
+   "name": "ถั่วฮันนีโรสต์ CGC",
+   "unit": "100 g",
+   "kcal": 526,
+   "p": 22.3,
+   "src": "label",
+   "alias": [
+    "ถั่วอบ",
+    "honey roast"
+   ],
+   "g": 100,
+   "salt": 1.2
+  },
+  {
+   "id": "vitamin_water0",
+   "name": "น้ำวิตามิน 0 kcal",
+   "unit": "100 ml",
+   "kcal": 0,
+   "p": 0.0,
+   "src": "label",
+   "alias": [
+    "น้ำวิตามิน"
+   ],
+   "g": 100,
+   "salt": 0.07
+  },
+  {
+   "id": "surume_ika",
+   "name": "ปลาหมึกรมควัน やわらかくんさき マルエス",
+   "unit": "1 ซอง = 38 g",
+   "kcal": 87,
+   "p": 10.6,
+   "src": "label",
+   "alias": [
+    "ปลาหมึก",
+    "さきいか"
+   ],
+   "g": 38,
+   "salt": 1.9
+  },
+  {
+   "id": "gyusuji_miso",
+   "name": "牛すじ煮込み (みそ味)",
+   "unit": "100 g",
+   "kcal": 131,
+   "p": 15.7,
+   "src": "label",
+   "alias": [
+    "เอ็นวัวตุ๋น",
+    "牛すじ"
+   ],
+   "g": 100,
+   "salt": 1.9
+  },
+  {
+   "id": "calorimit_soda",
+   "name": "キリン カロリミット ソーダ",
+   "unit": "1 กระป๋อง 350 ml",
+   "kcal": 0,
+   "p": 0.0,
+   "src": "label",
+   "alias": [
+    "คาโลริมิต",
+    "カロリミット"
+   ],
+   "g": 350,
+   "salt": 0.14
+  },
+  {
+   "id": "rice_scoop",
+   "name": "ข้าวสวย",
+   "unit": "1 ทัพพี = 80 g",
+   "kcal": 134,
+   "p": 2.0,
+   "src": "std",
+   "alias": [
+    "ข้าว",
+    "ข้าวสวย",
+    "ご飯"
+   ],
+   "g": 80
+  },
+  {
+   "id": "rice_100",
+   "name": "ข้าวสวย",
+   "unit": "100 g",
+   "kcal": 168,
+   "p": 2.5,
+   "src": "std",
+   "alias": [
+    "ข้าว 100"
+   ],
+   "g": 100
+  },
+  {
+   "id": "egg",
+   "name": "ไข่ไก่",
+   "unit": "1 ฟอง",
+   "kcal": 75,
+   "p": 6.0,
+   "src": "std",
+   "alias": [
+    "ไข่",
+    "たまご",
+    "egg"
+   ]
+  },
+  {
+   "id": "chicken_raw",
+   "name": "อกไก่ むね ไม่มีหนัง (ดิบ)",
+   "unit": "100 g ดิบ",
+   "kcal": 143,
+   "p": 23.0,
+   "src": "std",
+   "alias": [
+    "อกไก่",
+    "むね肉",
+    "chicken breast"
+   ],
+   "g": 100
+  },
+  {
+   "id": "chicken_boiled",
+   "name": "อกไก่ต้มฉีก (สุก)",
+   "unit": "1 ชต. พูน = 23 g",
+   "kcal": 45,
+   "p": 7.2,
+   "src": "std",
+   "alias": [
+    "อกไก่ต้ม",
+    "อกไก่ฉีก"
+   ],
+   "g": 23
+  },
+  {
+   "id": "banana",
+   "name": "กล้วย",
+   "unit": "1 ลูกกลาง",
+   "kcal": 90,
+   "p": 1.0,
+   "src": "std",
+   "alias": [
+    "กล้วย",
+    "banana"
+   ]
+  },
+  {
+   "id": "oil",
+   "name": "น้ำมันพืช",
+   "unit": "1 ชช.",
+   "kcal": 45,
+   "p": 0.0,
+   "src": "std",
+   "alias": [
+    "น้ำมัน",
+    "oil"
+   ]
+  },
+  {
+   "id": "veg_serve",
+   "name": "ผักผัด/ลวก",
+   "unit": "1 กำ = 80 g",
+   "kcal": 20,
+   "p": 1.0,
+   "src": "std",
+   "alias": [
+    "ผัก",
+    "ผักลวก",
+    "野菜"
+   ],
+   "g": 80
+  },
+  {
+   "id": "oat_tbsp",
+   "name": "ข้าวโอ๊ต Quaker",
+   "unit": "1 ชต. = 8 g",
+   "kcal": 32,
+   "p": 1.0,
+   "src": "std",
+   "alias": [
+    "โอ๊ต ชต"
+   ],
+   "g": 8
+  },
+  {
+   "id": "pork_hire",
+   "name": "หมูสันใน ヒレ สับ",
+   "unit": "1 ชต. = 20 g",
+   "kcal": 29,
+   "p": 4.6,
+   "src": "std",
+   "alias": [
+    "หมูสันใน",
+    "ヒレ"
+   ],
+   "g": 20
+  },
+  {
+   "id": "mushroom",
+   "name": "เห็ด",
+   "unit": "1 ดอก = 20 g",
+   "kcal": 10,
+   "p": 1.0,
+   "src": "std",
+   "alias": [
+    "เห็ด",
+    "きのこ"
+   ],
+   "g": 20
+  },
+  {
+   "id": "seas_kanokwan-kuakling",
+   "name": "พริกแกงคั่วกลิ้ง กนกวรรณ",
+   "src": "label",
+   "unit": "ใช้ 18 g/ครั้ง",
+   "kcal": 25,
+   "p": 0.8,
+   "kcal_100": 128,
+   "group": "seasoning",
+   "alias": [
+    "พริกแกงคั่วกลิ้ง",
+    "Kanokwan"
+   ],
+   "salt": 1.33,
+   "menu": "คั่วกลิ้งหมู/ไก่"
+  },
+  {
+   "id": "seas_kanokwan-kaengsom",
+   "name": "น้ำพริกแกงส้มใต้ กนกวรรณ",
+   "src": "label",
+   "unit": "ใช้ 16.6 g/ครั้ง",
+   "kcal": 25,
+   "p": 1.0,
+   "kcal_100": 164,
+   "group": "seasoning",
+   "alias": [
+    "น้ำพริกแกงส้มใต้",
+    "Kanokwan"
+   ],
+   "salt": 1.22,
+   "menu": "แกงส้มปลา/กุ้ง ผักรวม"
+  },
+  {
+   "id": "seas_knorr-lime",
+   "name": "ผงรสมะนาว Knorr Professional",
+   "src": "label",
+   "unit": "ใช้ 4 g/ครั้ง",
+   "kcal": 15,
+   "p": 0.0,
+   "kcal_100": 375,
+   "group": "seasoning",
+   "alias": [
+    "ผงรสมะนาว",
+    "Knorr"
+   ],
+   "menu": "ปรุงรสเปรี้ยวแทนมะนาว (ยำ/ต้มยำ/ลาบ)"
+  },
+  {
+   "id": "seas_uspice-samkler",
+   "name": "ผงสามเกลอ U Spice (กระเทียม-พริกไทย-รากผักชี)",
+   "src": "est",
+   "unit": "ใช้ 10 g/ครั้ง",
+   "kcal": 30,
+   "p": 0.0,
+   "kcal_100": 300,
+   "group": "seasoning",
+   "alias": [
+    "ผงสามเกลอ",
+    "U"
+   ],
+   "menu": "หมู/ไก่ทอดกระเทียมพริกไทย"
+  },
+  {
+   "id": "seas_chadaka-khaokua",
+   "name": "ข้าวคั่วสมุนไพร ตราชฎากา",
+   "src": "est",
+   "unit": "ใช้ 10 g/ครั้ง",
+   "kcal": 37,
+   "p": 0.0,
+   "kcal_100": 370,
+   "group": "seasoning",
+   "alias": [
+    "ข้าวคั่วสมุนไพร",
+    "Chadaka"
+   ],
+   "menu": "โรยลาบ/น้ำตก/ซุปหน่อไม้"
+  },
+  {
+   "id": "seas_fathai-mala",
+   "name": "น้ำซุปหม่าล่าเข้มข้น ฟ้าไทย",
+   "src": "est",
+   "unit": "ใช้ 150 ml/ครั้ง",
+   "kcal": 450,
+   "p": 0.0,
+   "kcal_100": 300,
+   "group": "seasoning",
+   "alias": [
+    "น้ำซุปหม่าล่าเข้มข้น",
+    "FaThai"
+   ],
+   "menu": "หม่าล่าหม้อไฟ (ชาบูเผ็ด)"
+  },
+  {
+   "id": "seas_fathai-porkbone",
+   "name": "น้ำซุปกระดูกหมูเข้มข้น ฟ้าไทย",
+   "src": "est",
+   "unit": "ใช้ 100 ml/ครั้ง",
+   "kcal": 90,
+   "p": 0.0,
+   "kcal_100": 90,
+   "group": "seasoning",
+   "alias": [
+    "น้ำซุปกระดูกหมูเข้มข้น",
+    "FaThai"
+   ],
+   "menu": "ชาบูน้ำซุปกระดูกหมู"
+  },
+  {
+   "id": "seas_fathai-jaewhon",
+   "name": "น้ำซุปแจ่วฮ้อนเข้มข้น ฟ้าไทย",
+   "src": "est",
+   "unit": "ใช้ 170 ml/ครั้ง",
+   "kcal": 155,
+   "p": 0.0,
+   "kcal_100": 90,
+   "group": "seasoning",
+   "alias": [
+    "น้ำซุปแจ่วฮ้อนเข้มข้น",
+    "FaThai"
+   ],
+   "menu": "แจ่วฮ้อน (จิ้มจุ่มอีสาน)"
+  },
+  {
+   "id": "seas_fathai-clearsoup",
+   "name": "ผงทำซุปน้ำใส ฟ้าไทย",
+   "src": "est",
+   "unit": "ใช้ 75 g/ครั้ง",
+   "kcal": 225,
+   "p": 0.0,
+   "kcal_100": 300,
+   "group": "seasoning",
+   "alias": [
+    "ผงทำซุปน้ำใส",
+    "FaThai"
+   ],
+   "menu": "ก๋วยเตี๋ยวน้ำใส / เกาเหลา"
+  },
+  {
+   "id": "seas_fathai-brownsoup",
+   "name": "ผงทำซุปน้ำข้น ฟ้าไทย",
+   "src": "est",
+   "unit": "ใช้ 75 g/ครั้ง",
+   "kcal": 240,
+   "p": 0.0,
+   "kcal_100": 320,
+   "group": "seasoning",
+   "alias": [
+    "ผงทำซุปน้ำข้น",
+    "FaThai"
+   ],
+   "menu": "ก๋วยเตี๋ยวน้ำข้น / น้ำตก"
+  },
+  {
+   "id": "seas_lobo-boatnoodle",
+   "name": "น้ำซุปก๋วยเตี๋ยวเรือเข้มข้น โลโบ",
+   "src": "est",
+   "unit": "ใช้ 120 g/ครั้ง",
+   "kcal": 300,
+   "p": 0.0,
+   "kcal_100": 250,
+   "group": "seasoning",
+   "alias": [
+    "น้ำซุปก๋วยเตี๋ยวเรือเข้มข้น",
+    "Lobo"
+   ],
+   "menu": "ก๋วยเตี๋ยวเรือ"
+  },
+  {
+   "id": "seas_hindee-boatnoodle",
+   "name": "ซุปก๋วยเตี๋ยวเรือ ตราฮินดี",
+   "src": "est",
+   "unit": "ใช้ 60 g/ครั้ง",
+   "kcal": 150,
+   "p": 0.0,
+   "kcal_100": 250,
+   "group": "seasoning",
+   "alias": [
+    "ซุปก๋วยเตี๋ยวเรือ",
+    "Hindee"
+   ],
+   "menu": "ก๋วยเตี๋ยวเรือ (ซองเล็ก)"
+  },
+  {
+   "id": "seas_lobo-palo",
+   "name": "เครื่องพะโล้ โลโบ",
+   "src": "est",
+   "unit": "ใช้ 65 g/ครั้ง",
+   "kcal": 220,
+   "p": 0.0,
+   "kcal_100": 340,
+   "group": "seasoning",
+   "alias": [
+    "เครื่องพะโล้",
+    "Lobo"
+   ],
+   "menu": "ไข่พะโล้ / หมูพะโล้"
+  },
+  {
+   "id": "seas_lobo-friedrice",
+   "name": "ผงปรุงข้าวผัด โลโบ",
+   "src": "est",
+   "unit": "ใช้ 50 g/ครั้ง",
+   "kcal": 138,
+   "p": 0.0,
+   "kcal_100": 275,
+   "group": "seasoning",
+   "alias": [
+    "ผงปรุงข้าวผัด",
+    "Lobo"
+   ],
+   "menu": "ข้าวผัดกุ้ง/หมู"
+  },
+  {
+   "id": "seas_lobo-padcha",
+   "name": "เครื่องปรุงผัดฉ่า โลโบ",
+   "src": "est",
+   "unit": "ใช้ 50 g/ครั้ง",
+   "kcal": 108,
+   "p": 0.0,
+   "kcal_100": 215,
+   "group": "seasoning",
+   "alias": [
+    "เครื่องปรุงผัดฉ่า",
+    "Lobo"
+   ],
+   "menu": "ผัดฉ่าซีฟู้ด/หมู"
+  },
+  {
+   "id": "seas_lobo-blackpepper",
+   "name": "ซอสผัดพริกไทยดำ โลโบ",
+   "src": "est",
+   "unit": "ใช้ 50 g/ครั้ง",
+   "kcal": 150,
+   "p": 0.0,
+   "kcal_100": 300,
+   "group": "seasoning",
+   "alias": [
+    "ซอสผัดพริกไทยดำ",
+    "Lobo"
+   ],
+   "menu": "ปลา/เนื้อผัดพริกไทยดำ"
+  },
+  {
+   "id": "seas_lobo-krapao",
+   "name": "เครื่องปรุงผัดใบกะเพรา โลโบ",
+   "src": "est",
+   "unit": "ใช้ 50 g/ครั้ง",
+   "kcal": 125,
+   "p": 0.0,
+   "kcal_100": 250,
+   "group": "seasoning",
+   "alias": [
+    "เครื่องปรุงผัดใบกะเพรา",
+    "Lobo"
+   ],
+   "menu": "ผัดกะเพราหมู/ไก่"
+  },
+  {
+   "id": "seas_lobo-chickenriceset",
+   "name": "ชุดทำข้าวมันไก่ โลโบ",
+   "src": "est",
+   "unit": "ใช้ 120 g/ครั้ง",
+   "kcal": 300,
+   "p": 0.0,
+   "kcal_100": 250,
+   "group": "seasoning",
+   "alias": [
+    "ชุดทำข้าวมันไก่",
+    "Lobo"
+   ],
+   "menu": "ข้าวมันไก่ (ครบชุด มีน้ำจิ้ม)"
+  },
+  {
+   "id": "seas_lobo-khaomok",
+   "name": "ผงทำข้าวหมกไก่ โลโบ",
+   "src": "est",
+   "unit": "ใช้ 25 g/ครั้ง",
+   "kcal": 70,
+   "p": 0.0,
+   "kcal_100": 280,
+   "group": "seasoning",
+   "alias": [
+    "ผงทำข้าวหมกไก่",
+    "Lobo"
+   ],
+   "menu": "ข้าวหมกไก่"
+  },
+  {
+   "id": "seas_meeprung-krapao",
+   "name": "ซอสผัดกะเพราพริกแห้ง ตราหมี่ปรุง",
+   "src": "est",
+   "unit": "ใช้ 60 g/ครั้ง",
+   "kcal": 132,
+   "p": 0.0,
+   "kcal_100": 220,
+   "group": "seasoning",
+   "alias": [
+    "ซอสผัดกะเพราพริกแห้ง",
+    "Meeprung"
+   ],
+   "menu": "ผัดกะเพราสูตรพริกแห้ง"
+  },
+  {
+   "id": "seas_rosdee-krapao",
+   "name": "รสดี เมนู ผัดกะเพรา",
+   "src": "est",
+   "unit": "ใช้ 50 g/ครั้ง",
+   "kcal": 150,
+   "p": 0.0,
+   "kcal_100": 300,
+   "group": "seasoning",
+   "alias": [
+    "รสดี",
+    "RosDee"
+   ],
+   "menu": "ผัดกะเพรา (ซองเดียวจบ)"
+  },
+  {
+   "id": "seas_rosdee-tomyum",
+   "name": "รสดี เมนู ต้มยำน้ำข้น",
+   "src": "est",
+   "unit": "ใช้ 50 g/ครั้ง",
+   "kcal": 190,
+   "p": 0.0,
+   "kcal_100": 380,
+   "group": "seasoning",
+   "alias": [
+    "รสดี",
+    "RosDee"
+   ],
+   "menu": "ต้มยำกุ้งน้ำข้น"
+  },
+  {
+   "id": "seas_kindee-tomyum",
+   "name": "กินดี ต้มยำน้ำข้น",
+   "src": "est",
+   "unit": "ใช้ 57 g/ครั้ง",
+   "kcal": 230,
+   "p": 0.0,
+   "kcal_100": 400,
+   "group": "seasoning",
+   "alias": [
+    "กินดี",
+    "Kindee"
+   ],
+   "menu": "ต้มยำน้ำข้น (เนื้อ/ทะเล)"
+  },
+  {
+   "id": "seas_rosdee-laab",
+   "name": "รสดี เมนู ลาบ-น้ำตก",
+   "src": "est",
+   "unit": "ใช้ 30 g/ครั้ง",
+   "kcal": 90,
+   "p": 0.0,
+   "kcal_100": 300,
+   "group": "seasoning",
+   "alias": [
+    "รสดี",
+    "RosDee"
+   ],
+   "menu": "ลาบ/น้ำตกหมู"
+  },
+  {
+   "id": "seas_rosdee-laab-lime",
+   "name": "รสดี เมนู ลาบ-น้ำตก สูตรมะนาวแซ่บ",
+   "src": "est",
+   "unit": "ใช้ 30 g/ครั้ง",
+   "kcal": 90,
+   "p": 0.0,
+   "kcal_100": 300,
+   "group": "seasoning",
+   "alias": [
+    "รสดี",
+    "RosDee"
+   ],
+   "menu": "ลาบสูตรมะนาวแซ่บ"
+  },
+  {
+   "id": "seas_kindee-laab",
+   "name": "กินดี ลาบ-น้ำตก",
+   "src": "est",
+   "unit": "ใช้ 30 g/ครั้ง",
+   "kcal": 90,
+   "p": 0.0,
+   "kcal_100": 300,
+   "group": "seasoning",
+   "alias": [
+    "กินดี",
+    "Kindee"
+   ],
+   "menu": "ลาบ/น้ำตก"
+  },
+  {
+   "id": "seas_kindee-jaew",
+   "name": "กินดี น้ำจิ้มแจ่ว (ผง)",
+   "src": "est",
+   "unit": "ใช้ 30 g/ครั้ง",
+   "kcal": 90,
+   "p": 0.0,
+   "kcal_100": 300,
+   "group": "seasoning",
+   "alias": [
+    "กินดี",
+    "Kindee"
+   ],
+   "menu": "น้ำจิ้มแจ่วสำหรับเนื้อย่าง/คอหมูย่าง"
+  },
+  {
+   "id": "seas_kindee-seafood",
+   "name": "กินดี x น้ำแซ่บ น้ำจิ้มซีฟู้ด (ผง)",
+   "src": "est",
+   "unit": "ใช้ 30 g/ครั้ง",
+   "kcal": 90,
+   "p": 0.0,
+   "kcal_100": 300,
+   "group": "seasoning",
+   "alias": [
+    "กินดี",
+    "Kindee"
+   ],
+   "menu": "น้ำจิ้มซีฟู้ดสำหรับอาหารทะเลนึ่ง/ลวก"
+  },
+  {
+   "id": "seas_raitip-tamarind",
+   "name": "น้ำมะขามเปียกเข้มข้น ไร่ทิพย์",
+   "src": "est",
+   "unit": "ใช้ 20 g/ครั้ง",
+   "kcal": 24,
+   "p": 0.0,
+   "kcal_100": 120,
+   "group": "seasoning",
+   "alias": [
+    "น้ำมะขามเปียกเข้มข้น",
+    "Raitip"
+   ],
+   "menu": "ผัดไทย / ต้มส้ม / ปรุงเปรี้ยวแทนมะขามสด"
+  }
+ ]
+}

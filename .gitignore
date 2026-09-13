@@ -1,0 +1,13 @@
+# ข้อมูลสุขภาพ/ข้อมูลจริง — ห้ามขึ้น repo สาธารณะเด็ดขาด
+fixtures/
+days/
+photos/
+diary/
+profile.json
+*.local.*
+*.pat
+.env
+# ของชั่วคราว
+__pycache__/
+*.pyc
+.DS_Store

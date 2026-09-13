@@ -1,0 +1,309 @@
+<!DOCTYPE html>
+<html lang="th">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover">
+<meta name="theme-color" content="#E9EDEE">
+<meta name="theme-color" content="#0E151A" media="(prefers-color-scheme: dark)">
+<title>จดแคล</title>
+
+<!-- PWA / iOS home-screen app -->
+<link rel="manifest" href="./manifest.webmanifest">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="default">
+<meta name="apple-mobile-web-app-title" content="จดแคล">
+<link rel="apple-touch-icon" href="./apple-touch-icon.png">
+<link rel="icon" type="image/png" href="./icon-192.png">
+
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500;600&family=IBM+Plex+Sans+Thai:wght@400;500;600;700&display=swap">
+<link rel="stylesheet" href="./css/app.css">
+
+<!-- ===== error boundary =====
+     ต้องเป็น inline ไม่ใช่โมดูล เพราะหน้าที่ของมันคือรับมือกรณีที่โมดูล/CSS โหลดไม่ได้
+     (import พังตัวเดียว = หน้าขาว และ service worker จะแคชหน้าขาวนั้นค้างไว้ แก้ยากมากบนมือถือ) -->
+<style>
+  #boot-error{
+    display:none;position:fixed;inset:0;z-index:9999;padding:24px 20px;
+    background:#0E151A;color:#E6EDF0;font:15px/1.6 -apple-system,"Segoe UI",sans-serif;
+  }
+  #boot-error h1{font-size:17px;margin:0 0 10px}
+  #boot-error pre{white-space:pre-wrap;word-break:break-word;font-size:12px;color:#93A5AE;
+    background:#161F25;border:1px solid #26333B;border-radius:8px;padding:10px;max-height:35vh;overflow:auto}
+  #boot-error button{
+    -webkit-appearance:none;appearance:none;margin-top:14px;width:100%;padding:14px;
+    background:#54A9A0;color:#06231f;border:0;border-radius:10px;font-size:16px;font-weight:600;
+  }
+  #boot-error small{display:block;margin-top:14px;color:#6D8089}
+</style>
+</head>
+<body>
+
+<div id="boot-error" role="alert">
+  <h1>แอพเปิดไม่ขึ้น</h1>
+  <p>ข้อมูลที่จดไว้ยังอยู่ในเครื่อง ไม่ได้หายไปกับหน้าจอนี้</p>
+  <pre id="boot-error-msg"></pre>
+  <button type="button" id="boot-error-reset">ล้างแคชแล้วโหลดใหม่</button>
+  <small>ถ้ายังไม่หาย: ปิดแอพแล้วเปิดใหม่อีกครั้ง (ข้อมูลไม่หาย)</small>
+</div>
+
+<!-- โครงหน้า: 4 มุมมอง — เนื้อในแต่ละมุมมองใส่ในก้อนงาน ui -->
+<main id="app">
+  <header id="topbar">
+    <div id="syncStatus" class="mono" aria-live="polite"></div>
+  </header>
+
+  <section id="viewDay" class="view" hidden>
+    <div class="topline">
+      <div class="daynav">
+        <button class="arrow" id="prevDay" type="button" aria-label="วันก่อนหน้า">‹</button>
+        <div class="date" id="date">—</div>
+        <button class="arrow" id="nextDay" type="button" aria-label="วันถัดไป">›</button>
+      </div>
+      <div class="weight" id="weight">—</div>
+    </div>
+    <div class="daymeta">
+      <button class="backtoday" id="backToday" type="button" hidden>↩ กลับไปวันนี้</button>
+      <div class="daystate" id="dayState" hidden></div>
+    </div>
+
+    <div class="card meter">
+      <div class="lead">
+        <div class="big" id="bigwrap">
+          <div class="label" id="biglabel">เหลือวันนี้</div>
+          <div class="num" id="bignum">—<span class="unit">kcal</span></div>
+        </div>
+        <div class="eaten-side">
+          <div class="n" id="eaten">—</div>
+          <div class="k">กินไปแล้ว จาก <span id="limit">—</span></div>
+        </div>
+      </div>
+      <div class="gauge">
+        <div class="track" id="track">
+          <div class="zone-over" id="zoneover"></div>
+        </div>
+        <div class="tick" id="tickLimit"></div>
+        <div class="tick-label" id="tickLimitLabel"></div>
+        <div class="tick soft" id="tickTdee"></div>
+        <div class="tick-label" id="tickTdeeLabel"></div>
+      </div>
+    </div>
+
+    <div class="card protein">
+      <div class="prow">
+        <div class="t">โปรตีน (ยิ่งเยอะยิ่งดี)</div>
+        <div class="v"><span id="pnow">—</span><small> / <span id="pgoal">—</span> g</small></div>
+      </div>
+      <div class="pbar"><div class="pfill" id="pfill"></div></div>
+      <div class="pnote" id="pnote"></div>
+    </div>
+
+    <div class="card meals" id="meals"></div>
+
+    <div id="estDetail" class="est-pop" hidden>
+      <div class="est-pop-card" role="dialog" aria-labelledby="estDetailTitle" aria-modal="true">
+        <div class="est-pop-h">
+          <b id="estDetailTitle">รายละเอียดค่าประมาณ</b>
+          <button type="button" id="estDetailClose" aria-label="ปิด">×</button>
+        </div>
+        <div id="estDetailBody"></div>
+      </div>
+    </div>
+  </section>
+
+  <section id="viewMonth" class="view" hidden>
+    <div class="topline">
+      <div class="date" id="monthTitle">—</div>
+      <div class="weight" id="monthMeta">—</div>
+    </div>
+
+    <div class="sums">
+      <div class="sum"><div class="k">เฉลี่ยต่อวัน</div><div class="v" id="sAvg">—</div></div>
+      <div class="sum"><div class="k">อยู่ในงบ 1,800</div><div class="v" id="sUnder">—</div></div>
+      <div class="sum"><div class="k" id="sDeficitK">ขาดดุลสะสม (เทียบ TDEE)</div><div class="v" id="sDeficit">—</div></div>
+      <div class="sum"><div class="k">โปรตีนถึงเป้า</div><div class="v" id="sProtein">—</div></div>
+      <div class="sum span" id="sOpenWrap" hidden><div class="k">ยังไม่ยืนยัน</div><div class="v" id="sOpen">—</div></div>
+    </div>
+
+    <div class="card cal">
+      <div class="dow"><span>จ</span><span>อ</span><span>พ</span><span>พฤ</span><span>ศ</span><span>ส</span><span>อา</span></div>
+      <div class="grid" id="grid"></div>
+      <div class="callegend">
+        <div><i class="lg-good"></i>อยู่ในงบ</div>
+        <div><i class="lg-warn"></i>เกินงบ แต่ยังต่ำกว่าที่เผา</div>
+        <div><i class="lg-over"></i>เกินที่เผา</div>
+        <div><i class="lg-open"></i>ยังไม่ยืนยัน</div>
+      </div>
+    </div>
+
+    <div class="card wcard">
+      <div class="h">
+        <div class="t">น้ำหนักเช้า</div>
+        <div class="v" id="wRange">—</div>
+      </div>
+      <svg class="spark" id="spark" viewBox="0 0 300 56" preserveAspectRatio="none" aria-hidden="true"></svg>
+      <div class="wnote" id="wNote"></div>
+
+      <div class="brow">
+        <div class="h"><div class="t">กล้ามเนื้อ</div><div class="v" id="mRange">—</div></div>
+        <svg class="spark small" id="sparkM" viewBox="0 0 300 38" preserveAspectRatio="none" aria-hidden="true"></svg>
+        <div class="wnote" id="mNote"></div>
+      </div>
+
+      <div class="brow">
+        <div class="h"><div class="t">% ไขมัน</div><div class="v" id="fRange">—</div></div>
+        <svg class="spark small" id="sparkF" viewBox="0 0 300 38" preserveAspectRatio="none" aria-hidden="true"></svg>
+        <div class="wnote" id="fatNote"></div>
+      </div>
+    </div>
+  </section>
+  <section id="viewForm" class="view" hidden>
+    <div class="fcard fweight">
+      <div class="frow" style="align-items:flex-end">
+        <div class="fg" style="flex:0 0 auto"><label for="fDate">วันที่</label><input type="date" id="fDate"></div>
+        <div class="fg" style="flex:0 0 auto"><label for="fTime">เวลาชั่ง</label><input type="time" id="fTime" style="width:96px"></div>
+      </div>
+      <div class="fmain">
+        <input type="number" id="fWeight" step="0.1" inputmode="decimal" placeholder="—" style="flex:0 1 170px" aria-label="น้ำหนักเช้า กิโลกรัม">
+        <span class="fdelta" id="fDelta">—</span>
+        <span class="u" id="fRef"></span>
+      </div>
+      <p class="fhint">ชั่งตอนตื่นนอน เข้าห้องน้ำแล้ว ก่อนกินอะไร · <b>บันทึกไว้ก่อน</b> = เก็บไว้ในเครื่อง แก้ต่อได้ทั้งวัน · <b>ส่งคำนวณ</b> = เข้าคิวให้ AI ประเมิน (ไม่ต้องมีเน็ตตอนกด — ส่งเมื่อมีเน็ต)</p>
+    </div>
+
+    <div class="fcard">
+      <h3>ตาชั่ง dretec</h3>
+      <div class="fgrid">
+        <div class="fg"><label for="fBmi">BMI <i id="rBmi"></i></label><input type="number" step="0.1" inputmode="decimal" id="fBmi"></div>
+        <div class="fg"><label for="fFat">% ไขมัน <i id="rFat"></i></label><input type="number" step="0.1" inputmode="decimal" id="fFat"></div>
+        <div class="fg"><label for="fMuscle">กล้ามเนื้อ กก. <i id="rMuscle"></i></label><input type="number" step="0.1" inputmode="decimal" id="fMuscle"></div>
+        <div class="fg"><label for="fVisceral">Visceral Fat</label><input type="number" step="1" inputmode="numeric" id="fVisceral"></div>
+        <div class="fg"><label for="fWater">% น้ำ</label><input type="number" step="0.1" inputmode="decimal" id="fWater"></div>
+        <div class="fg"><label for="fBone">มวลกระดูก กก.</label><input type="number" step="0.1" inputmode="decimal" id="fBone"></div>
+        <div class="fg"><label for="fBmr">BMR kcal</label><input type="number" step="1" inputmode="numeric" id="fBmr"></div>
+        <div class="fg"><label for="fMage">Metabolic Age</label><input type="number" step="1" inputmode="numeric" id="fMage"></div>
+      </div>
+      <p class="fhint">กรอกเท่าที่แอปขึ้น ช่องว่างจะไม่ถูกเขียนเป็น 0</p>
+    </div>
+
+    <div class="fcard" id="fMeals">
+      <h3>กินอะไรไปบ้าง — บรรทัดละอย่าง</h3>
+    </div>
+
+    <div class="fcard">
+      <h3>อย่างอื่นที่อยากบอก</h3>
+      <textarea id="fNote" placeholder="เช่น เค็มไหม · หิวตอนไหน · นอนกี่ชั่วโมง · ออกกำลังกายอะไร"></textarea>
+    </div>
+
+    <div class="fcard fsave">
+      <div class="fbtns">
+        <button type="button" class="ghost" id="fSave">บันทึกไว้ก่อน</button>
+        <button type="button" class="primary" id="fSend">ส่งคำนวณ</button>
+      </div>
+      <div class="fsent" id="fSent"></div>
+      <span class="fstatus" id="fStatus"></span>
+    </div>
+  </section>
+
+  <div id="foodSuggest" hidden></div>
+
+  <section id="viewSettings" class="view" hidden>
+    <div class="fcard">
+      <h3>คีย์และโมเดล</h3>
+      <p class="fhint">เก็บในเครื่องนี้เท่านั้น (localStorage) ไม่ขึ้น IndexedDB และไม่ถูกส่งออกพร้อมข้อมูลอาหาร</p>
+      <div class="fg">
+        <label for="sOrKey">OpenRouter API key</label>
+        <input type="password" id="sOrKey" autocomplete="off" spellcheck="false" placeholder="วางคีย์แล้วจะบันทึกอัตโนมัติ">
+        <div class="shint" id="sOrKeyHint"></div>
+      </div>
+      <button type="button" class="sbtn" id="sTestOr">ทดสอบ OpenRouter</button>
+      <div class="sstatus" id="sTestOrMsg"></div>
+      <div class="fg">
+        <label for="sGhPat">GitHub PAT</label>
+        <input type="password" id="sGhPat" autocomplete="off" spellcheck="false" placeholder="วาง PAT แล้วจะบันทึกอัตโนมัติ">
+        <div class="shint" id="sGhPatHint"></div>
+      </div>
+      <div class="fg">
+        <label for="sGhRepo">GitHub repo (เจ้าของ/ชื่อ-repo)</label>
+        <input type="text" id="sGhRepo" autocomplete="off" spellcheck="false" placeholder="เช่น username/calorie-data">
+      </div>
+      <button type="button" class="sbtn" id="sTestGh">ทดสอบ GitHub</button>
+      <div class="sstatus" id="sTestGhMsg"></div>
+      <div class="fg">
+        <label for="sAiModels">ลิสต์โมเดล (บรรทัดละ 1 ตัว เรียง fallback)</label>
+        <textarea id="sAiModels" rows="4" spellcheck="false"></textarea>
+      </div>
+    </div>
+
+    <div class="fcard">
+      <h3>สำรองข้อมูล</h3>
+      <p class="fhint">Safari อาจล้างข้อมูลของเว็บที่ไม่ได้เปิดใน 7 วัน — ส่งออกไว้เป็นระยะ โดยเฉพาะก่อนไม่ใช้แอพนาน</p>
+      <div class="fbtns">
+        <button type="button" class="ghost" id="sExport">ส่งออกข้อมูล (JSON)</button>
+        <button type="button" class="primary" id="sImport">นำเข้า…</button>
+      </div>
+      <input type="file" id="sImportFile" accept="application/json" hidden>
+      <div class="sstatus" id="sBackupMsg"></div>
+    </div>
+
+    <div class="fcard">
+      <h3>สถานะเครื่อง</h3>
+      <div class="sdev">
+        <div><span class="k">เวอร์ชันแคช</span><span class="v" id="sDevSw">—</span></div>
+        <div><span class="k">จำนวนวันในเครื่อง</span><span class="v" id="sDevDays">—</span></div>
+        <div><span class="k">งานค้างในคิว</span><span class="v" id="sDevQueue">—</span></div>
+        <div><span class="k">โหมดที่เปิดอยู่</span><span class="v" id="sDevMode">—</span></div>
+      </div>
+      <p class="fhint" id="sDevModeHint"></p>
+      <button type="button" class="sbtn danger" id="sResetCache">ล้างแคชแล้วโหลดใหม่</button>
+    </div>
+  </section>
+
+  <nav id="tabs">
+    <button type="button" id="tabDay">วันนี้</button>
+    <button type="button" id="tabMonth">ทั้งเดือน</button>
+    <button type="button" id="tabForm">จด</button>
+    <button type="button" id="tabSettings" aria-label="ตั้งค่า">⚙</button>
+  </nav>
+</main>
+
+<script>
+/* ===== error boundary + ปุ่มกู้ (inline โดยเจตนา) ===== */
+(function () {
+  var shown = false;
+  function show(msg) {
+    if (shown) return; shown = true;
+    var box = document.getElementById('boot-error');
+    document.getElementById('boot-error-msg').textContent = String(msg || '').slice(0, 800);
+    if (box) box.style.display = 'block';
+  }
+  window.addEventListener('error', function (e) {
+    // ดักเฉพาะ error ตอนบูต: ถ้าแอพขึ้นแล้ว (มี data-booted) ไม่ต้องบังหน้าจอ
+    if (!document.documentElement.hasAttribute('data-booted'))
+      show((e.message || 'error') + '\n' + (e.filename || '') + ':' + (e.lineno || ''));
+  });
+  window.addEventListener('unhandledrejection', function (e) {
+    if (!document.documentElement.hasAttribute('data-booted'))
+      show('unhandled: ' + ((e.reason && (e.reason.stack || e.reason.message)) || e.reason));
+  });
+  // ถ้า 8 วินาทีแล้วแอพยังไม่ประกาศว่าบูตเสร็จ ถือว่าพัง
+  setTimeout(function () {
+    if (!document.documentElement.hasAttribute('data-booted')) show('แอพไม่ตอบสนองภายใน 8 วินาที (โมดูลอาจโหลดไม่ได้)');
+  }, 8000);
+
+  var btn = document.getElementById('boot-error-reset');
+  if (btn) btn.addEventListener('click', function () {
+    btn.textContent = 'กำลังล้าง…';
+    var jobs = [];
+    if (window.caches) jobs.push(caches.keys().then(function (ks) { return Promise.all(ks.map(function (k) { return caches.delete(k); })); }));
+    if (navigator.serviceWorker) jobs.push(navigator.serviceWorker.getRegistrations().then(function (rs) { return Promise.all(rs.map(function (r) { return r.unregister(); })); }));
+    Promise.all(jobs).catch(function () {}).then(function () { location.replace(location.pathname + '?r=' + Date.now()); });
+  });
+})();
+</script>
+
+<script type="module" src="./js/app.js"></script>
+</body>
+</html>

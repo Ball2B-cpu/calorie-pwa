@@ -1,0 +1,634 @@
+<!DOCTYPE html>
+<html lang="th">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>ทดสอบ db.js + net.js — จดแคล</title>
+<style>
+  body { font-family: "IBM Plex Sans Thai", "Segoe UI", sans-serif; max-width: 760px; margin: 24px auto; padding: 0 16px; color: #102027; }
+  h1 { font-size: 20px; }
+  ol { padding-left: 1.4em; }
+  li { margin: 7px 0; line-height: 1.45; }
+  .ok { color: #0a7a4a; }
+  .fail { color: #b42318; }
+  #summary { font-size: 22px; font-weight: 700; margin: 18px 0 8px; }
+  #log { background: #11181c; color: #ffb4ab; padding: 12px; border-radius: 8px; white-space: pre-wrap; word-break: break-word; display: none; }
+</style>
+</head>
+<body>
+<h1>ทดสอบ db.js + net.js</h1>
+<p>เปิดหน้านี้แล้วรันเอง ไม่ต้องมี test runner</p>
+<ol id="results"></ol>
+<div id="summary">กำลังรัน…</div>
+<pre id="log"></pre>
+<script type="module">
+import * as db from './js/db.js';
+import * as net from './js/net.js';
+
+const results = document.getElementById('results');
+const summary = document.getElementById('summary');
+const logEl = document.getElementById('log');
+
+function assert(cond, msg) {
+  if (!cond) throw new Error(msg || 'assert ล้ม');
+}
+function deepEqual(a, b) {
+  if (a === b) return true;
+  if (a == null || b == null) return a === b;
+  if (typeof a !== typeof b) return false;
+  if (typeof a !== 'object') return false;
+  if (Array.isArray(a) !== Array.isArray(b)) return false;
+  if (Array.isArray(a)) {
+    if (a.length !== b.length) return false;
+    return a.every((v, i) => deepEqual(v, b[i]));
+  }
+  const ak = Object.keys(a), bk = Object.keys(b);
+  if (ak.length !== bk.length) return false;
+  return ak.every((k) => Object.prototype.hasOwnProperty.call(b, k) && deepEqual(a[k], b[k]));
+}
+function deepFreeze(o) {
+  if (o && typeof o === 'object' && !Object.isFrozen(o)) {
+    Object.freeze(o);
+    for (const k of Object.getOwnPropertyNames(o)) deepFreeze(o[k]);
+  }
+  return o;
+}
+function baseDay(over = {}) {
+  return {
+    schema: 2,
+    date: '1999-01-01',
+    rev: 1,
+    updatedAt: '2026-09-01T00:00:00+09:00',
+    updatedBy: 'claude',
+    state: 'draft',
+    body: {},
+    garmin: null,
+    meals: [],
+    note: '',
+    ai: null,
+    review: null,
+    totals: {},
+    closed: false,
+    savedAt: null,
+    submitted: false,
+    submittedAt: null,
+    conflicts: [],
+    history: [],
+    ...over,
+  };
+}
+
+const cases = [];
+function test(name, fn) { cases.push({ name, fn }); }
+
+/* ---- 6 เคสบังคับ ---- */
+
+test('app เขียน body.weight ได้', () => {
+  const remote = baseDay({ body: { fat: 26.2 } });
+  const local = baseDay({ body: { weight: 92.7 } });
+  deepFreeze(remote); deepFreeze(local);
+  const m = db.mergeDay(remote, local, 'app');
+  assert(m.body.weight === 92.7, 'weight ต้องเป็นค่าจาก local');
+  assert(m.body.fat === 26.2, 'fat ของ remote ต้องไม่หาย');
+});
+
+test('app เขียน meals[].final ไม่ได้ (ค่า remote คงอยู่)', () => {
+  const remote = baseDay({
+    meals: [{ id: 'm_a', key: 'เช้า', raw: ['ไข่'], items: [{ name: 'ไข่', final: { kcal: 150, p: 12 } }], final: { kcal: 150, p: 12 } }],
+  });
+  const local = baseDay({
+    meals: [{ id: 'm_a', key: 'เช้า', raw: ['ไข่'], items: [{ name: 'ไข่', final: { kcal: 999, p: 1 } }], final: { kcal: 999, p: 1 } }],
+  });
+  const m = db.mergeDay(remote, local, 'app');
+  assert(m.meals[0].final.kcal === 150, 'meal.final ต้องเป็นของ remote');
+  assert(m.meals[0].items[0].final.kcal === 150, 'item.final ต้องเป็นของ remote');
+});
+
+test('claude เขียน meals[].raw ไม่ได้', () => {
+  const remote = baseDay({
+    meals: [{ id: 'm_a', key: 'เช้า', raw: ['ข้าวต้มโอ๊ต'], final: { kcal: 100, p: 4 } }],
+  });
+  const local = baseDay({
+    meals: [{ id: 'm_a', key: 'เช้า', raw: ['ถูกแก้โดย claude'], final: { kcal: 110, p: 5 } }],
+  });
+  const m = db.mergeDay(remote, local, 'claude');
+  assert(deepEqual(m.meals[0].raw, ['ข้าวต้มโอ๊ต']), 'raw ต้องคงของ remote');
+  assert(m.meals[0].final.kcal === 110, 'claude เขียน final ได้');
+});
+
+test('meals merge ด้วย id — สลับลำดับ array แล้วข้อมูลไม่สลับกัน', () => {
+  const remote = baseDay({
+    meals: [
+      { id: 'm_a', key: 'เช้า', raw: ['A'], final: { kcal: 1 } },
+      { id: 'm_b', key: 'เย็น', raw: ['B'], final: { kcal: 2 } },
+    ],
+  });
+  const local = baseDay({
+    meals: [
+      { id: 'm_b', key: 'เย็น', raw: ['B-local'], final: { kcal: 99 } },
+      { id: 'm_a', key: 'เช้า', raw: ['A-local'], final: { kcal: 88 } },
+    ],
+  });
+  const m = db.mergeDay(remote, local, 'app');
+  assert(m.meals.length === 2, 'ต้องมี 2 มื้อ');
+  assert(m.meals[0].id === 'm_a' && m.meals[1].id === 'm_b', 'ลำดับตาม remote');
+  assert(deepEqual(m.meals[0].raw, ['A-local']), 'id m_a ต้องได้ raw ของ m_a');
+  assert(deepEqual(m.meals[1].raw, ['B-local']), 'id m_b ต้องได้ raw ของ m_b');
+  assert(m.meals[0].final.kcal === 1 && m.meals[1].final.kcal === 2, 'final ตาม id ของ remote ไม่ตามตำแหน่ง local');
+});
+
+test('rev = max+1 และ history ต่อเพิ่มขึ้น', () => {
+  const remote = baseDay({
+    rev: 3,
+    history: [{ at: 'T0', by: 'claude', fields: ['migrate'], rev: 1 }],
+  });
+  const local = baseDay({
+    rev: 5,
+    body: { weight: 91.2 },
+    history: [{ at: 'T0', by: 'claude', fields: ['migrate'], rev: 1 }],
+  });
+  const before = remote.history.length;
+  const m = db.mergeDay(remote, local, 'app');
+  assert(m.rev === 6, `rev ต้องเป็น max(3,5)+1=6 ได้ ${m.rev}`);
+  assert(m.updatedBy === 'app', 'updatedBy = as');
+  assert(m.history.length === before + 1, 'history ต้องเพิ่มขึ้น 1');
+  const last = m.history[m.history.length - 1];
+  assert(last.by === 'app' && last.rev === 6, 'history ท้ายสุดเป็นรอบนี้');
+  assert(Array.isArray(last.fields) && last.fields.includes('body.weight'), 'fields ต้องมี path ที่เปลี่ยน');
+  assert(typeof last.at === 'string' && last.at.includes('T'), 'at เป็น ISO');
+});
+
+test('ค่าชนกันของเจ้าของเดียวกัน → เข้า conflicts ไม่ถูกทิ้ง และ remote ชนะ', () => {
+  const kept = { path: 'note', mine: 'ของฉัน', theirs: 'ของเขา', at: '2026-09-01T07:00:00+09:00' };
+  const remote = baseDay({
+    rev: 4,
+    updatedBy: 'app',
+    body: { weight: 90 },
+    note: 'ของเขา',
+    conflicts: [kept],
+    history: [{ at: '2026-09-01T08:00:00+09:00', by: 'app', fields: ['body.weight'], rev: 4 }],
+  });
+  const local = baseDay({
+    rev: 4,
+    updatedBy: 'app',
+    body: { weight: 92.5 },
+    note: 'ของฉัน',
+    conflicts: [kept],
+    history: [{ at: '2026-09-01T09:00:00+09:00', by: 'app', fields: ['body.weight'], rev: 4 }],
+  });
+  const m = db.mergeDay(remote, local, 'app');
+  assert(m.body.weight === 90, 'remote ต้องชนะ');
+  const hit = m.conflicts.find((c) => c.path === 'body.weight');
+  assert(hit, 'ต้องมี conflict ของ body.weight');
+  assert(hit.mine === 92.5 && hit.theirs === 90, 'mine/theirs ต้องเก็บทั้งสองค่า');
+  assert(m.conflicts.some((c) => c.path === 'note' && c.mine === 'ของฉัน'), 'conflict เดิมห้ามถูกทิ้ง');
+});
+
+/* ---- เคสเพิ่ม ---- */
+
+test('มื้อที่มีแค่ remote ห้ามหาย และมื้อใหม่ของ app ถูกเพิ่ม', () => {
+  const remote = baseDay({
+    meals: [{ id: 'm_keep', key: 'เช้า', raw: ['คงไว้'] }],
+  });
+  const local = baseDay({
+    meals: [{ id: 'm_new', key: 'เย็น', raw: ['มื้อใหม่'] }],
+  });
+  const m = db.mergeDay(remote, local, 'app');
+  const ids = m.meals.map((x) => x.id);
+  assert(ids.includes('m_keep'), 'มื้อ remote ต้องอยู่');
+  assert(ids.includes('m_new'), 'มื้อใหม่ของ app ต้องถูกเพิ่ม');
+  const ai = db.mergeDay(remote, local, 'ai');
+  assert(ai.meals.length === 1 && ai.meals[0].id === 'm_keep', 'ai ห้ามเพิ่มมื้อ');
+});
+
+test('mergeDay ไม่แก้ remote/local ที่รับเข้ามา (pure)', () => {
+  const remote = baseDay({ body: { weight: 90, fat: 26 }, meals: [{ id: 'm1', raw: ['a'], final: { kcal: 1 } }] });
+  const local = baseDay({ body: { weight: 91 }, meals: [{ id: 'm1', raw: ['b'], final: { kcal: 9 } }] });
+  const rSnap = JSON.stringify(remote);
+  const lSnap = JSON.stringify(local);
+  deepFreeze(remote); deepFreeze(local);
+  const m = db.mergeDay(remote, local, 'app');
+  assert(JSON.stringify(remote) === rSnap, 'remote ถูกแก้');
+  assert(JSON.stringify(local) === lSnap, 'local ถูกแก้');
+  assert(m !== remote && m !== local, 'ต้องเป็นออบเจ็กต์ใหม่');
+});
+
+test('putPhoto ปฏิเสธรูปใหญ่ / ด้านยาวเกิน / ไม่ใช่ Blob', async () => {
+  await db.open();
+  const tiny = new Blob([new Uint8Array(32)], { type: 'image/jpeg' });
+  let n = 0;
+  try {
+    await db.putPhoto({ id: 'p_big_bytes', date: '1999-01-01', blob: tiny, w: 10, h: 10, bytes: 250 * 1024 + 1 });
+  } catch (e) {
+    assert(/250/.test(String(e.message || e)), 'ข้อความต้องบอก 250 KB');
+    n++;
+  }
+  try {
+    await db.putPhoto({ id: 'p_big_side', date: '1999-01-01', blob: tiny, w: 1025, h: 10, bytes: 32 });
+  } catch (e) {
+    assert(/1024/.test(String(e.message || e)), 'ข้อความต้องบอก 1024');
+    n++;
+  }
+  try {
+    await db.putPhoto({ id: 'p_not_blob', date: '1999-01-01', blob: 'nope', w: 10, h: 10, bytes: 4 });
+  } catch (e) {
+    assert(/Blob|รูป/.test(String(e.message || e)), 'ข้อความต้องบอกว่าไม่ใช่รูป');
+    n++;
+  }
+  assert(n === 3, `ต้องถูกปฏิเสธทั้ง 3 กรณี (ได้ ${n})`);
+});
+
+test('outbox: enqueue / failJob เพิ่ม tries คางานไว้ / completeJob ลบ', async () => {
+  await db.open();
+  let threw = false;
+  try { await db.enqueue({ kind: 'nope', date: '1999-01-01' }); } catch { threw = true; }
+  assert(threw, 'kind แปลกต้อง throw');
+
+  const id = await db.enqueue({ kind: 'gh-day', date: '1999-01-01' });
+  assert(id != null, 'enqueue ต้องได้ id');
+  await db.failJob(id, new Error('เน็ตหลุดชั่วคราว'));
+  await db.failJob(id, 'timeout');
+  const listed = await db.listOutbox();
+  const job = listed.find((j) => j.id === id);
+  assert(job, 'งานที่ล้มต้องยังอยู่ใน listOutbox');
+  assert(job.tries === 2, `tries ต้องเป็น 2 ได้ ${job.tries}`);
+  assert(typeof job.lastError === 'string' && job.lastError.includes('timeout'), 'lastError เป็นสตริงเหตุผลล่าสุด');
+  const ids = listed.map((j) => j.id);
+  const sorted = ids.slice().sort((a, b) => a - b);
+  assert(deepEqual(ids, sorted), 'listOutbox เรียงตาม id');
+  await db.completeJob(id);
+  const after = await db.listOutbox();
+  assert(!after.some((j) => j.id === id), 'completeJob ต้องลบงาน');
+});
+
+test('export ไม่มี key/token ของบริการภายนอก', async () => {
+  await db.open();
+  const k1 = localStorage.getItem('cal.or_key');
+  const k2 = localStorage.getItem('cal.gh_pat');
+  const needleOr = ['sk', 'or', 'TESTKEY'].join('-');
+  const needlePat = ['github', 'pat', 'TESTKEY'].join('_');
+  const needleGhp = 'ghp' + '_' + 'TESTKEY';
+  localStorage.setItem('cal.or_key', needleOr);
+  localStorage.setItem('cal.gh_pat', needlePat);
+  try {
+    const ex = await db.exportAll();
+    const s = JSON.stringify(ex);
+    assert(ex.app === 'calorie-pwa' && ex.schema === 2, 'โครง export ไม่ครบ');
+    assert(Array.isArray(ex.days) && Array.isArray(ex.photos), 'ต้องมี days/photos');
+    assert(!s.includes(['sk', 'or', ''].join('-')), 'export มีคีย์ openrouter');
+    assert(!s.includes(['github', 'pat', ''].join('_')), 'export มี PAT');
+    assert(!s.includes('ghp' + '_'), 'export มี token แบบ ghp');
+    assert(!s.includes(needleOr) && !s.includes(needlePat) && !s.includes(needleGhp), 'export ห้ามมีค่าที่เพิ่งใส่ใน localStorage');
+    assert(!Object.prototype.hasOwnProperty.call(ex, 'cal.or_key'), 'ห้ามมีคีย์ localStorage');
+  } finally {
+    if (k1 == null) localStorage.removeItem('cal.or_key'); else localStorage.setItem('cal.or_key', k1);
+    if (k2 == null) localStorage.removeItem('cal.gh_pat'); else localStorage.setItem('cal.gh_pat', k2);
+  }
+});
+
+test('export→import round-trip ได้ข้อมูลเดิมครบ', async () => {
+  await db.open();
+  const date = '1999-01-02';
+  const doc = baseDay({
+    date,
+    rev: 2,
+    body: { weight: 88.8, fat: 25.1 },
+    garmin: { burn: 2400, steps: 1000 },
+    meals: [{ id: 'm_rt', key: 'เช้า', raw: ['โยเกิร์ต'], items: [{ name: 'โยเกิร์ต', final: { kcal: 70, p: 4 } }], final: { kcal: 70, p: 4 } }],
+    note: 'รอบทดสอบ',
+    totals: { final: { kcal: 70, p: 4 } },
+    closed: true,
+  });
+  await db.putDay(doc);
+  const blob = new Blob([new Uint8Array([1, 2, 3, 4, 5])], { type: 'image/jpeg' });
+  await db.putPhoto({ id: 'p_rt_1999', date, mealId: 'm_rt', blob, w: 8, h: 8, bytes: 5 });
+  const ex = await db.exportAll();
+  const dumped = ex.days.find((d) => d.date === date);
+  const dumpedP = ex.photos.find((p) => p.id === 'p_rt_1999');
+  assert(dumped && dumped.body.weight === 88.8, 'export ต้องมีวันทดสอบ');
+  assert(dumpedP && typeof dumpedP.blobBase64 === 'string' && dumpedP.blobBase64.length > 0, 'รูปต้องเป็น blobBase64');
+  assert(!('blob' in dumpedP) || dumpedP.blob == null, 'export รูปห้ามส่ง Blob ดิบ');
+
+  const summary = await db.importAll(JSON.parse(JSON.stringify(ex)));
+  assert(summary.days >= 1, 'import ต้องนับวัน');
+  const back = await db.getDay(date);
+  assert(back.body.weight === 88.8 && back.body.fat === 25.1, 'body ครบ');
+  assert(back.garmin && back.garmin.burn === 2400, 'garmin ครบ');
+  assert(back.meals[0].raw[0] === 'โยเกิร์ต' && back.meals[0].final.kcal === 70, 'มื้อครบ');
+  assert(back.note === 'รอบทดสอบ' && back.closed === true, 'note/closed ครบ');
+  const photos = await db.listPhotos(date);
+  const p = photos.find((x) => x.id === 'p_rt_1999');
+  assert(p && p.blob instanceof Blob, 'รูปต้องกลับมาเป็น Blob');
+  assert(p.bytes === 5 && p.w === 8, 'เมตารูปครบ');
+});
+
+test('getDay ที่ไม่มี / putDay อัปเดต updatedAt / listDays เรียงวันที่', async () => {
+  await db.open();
+  assert(await db.getDay('1900-01-01') === null, 'getDay ที่ไม่มีต้องได้ null');
+  const a = baseDay({ date: '1999-01-03', body: { weight: 1 } });
+  const b = baseDay({ date: '1999-01-05', body: { weight: 2 } });
+  const c = baseDay({ date: '1999-01-04', body: { weight: 3 } });
+  const saved = await db.putDay(a);
+  assert(typeof saved.updatedAt === 'string' && saved.updatedAt.includes('T'), 'putDay ต้องตั้ง updatedAt');
+  await db.putDay(b);
+  await db.putDay(c);
+  const list = await db.listDays('1999-01');
+  const dates = list.map((d) => d.date);
+  const subset = dates.filter((d) => d === '1999-01-03' || d === '1999-01-04' || d === '1999-01-05');
+  assert(deepEqual(subset, ['1999-01-03', '1999-01-04', '1999-01-05']), 'listDays ต้องเรียงวันที่');
+});
+
+test('โหลด fixture 12 วันผ่าน importAll แล้ว listDays(2026-09) ได้ 12 วันเรียงถูก', async () => {
+  await db.open();
+  const days = [];
+  for (let i = 1; i <= 12; i++) {
+    const dd = String(i).padStart(2, '0');
+    const res = await fetch(`./fixtures/days/2026-09-${dd}.json`);
+    assert(res.ok, `โหลด fixture 2026-09-${dd} ไม่ได้ (${res.status})`);
+    days.push(await res.json());
+  }
+  const summary = await db.importAll({ app: 'calorie-pwa', schema: 2, days, photos: [] });
+  assert(summary.days === 12, `import ต้องได้ 12 วัน ได้ ${summary.days}`);
+  const listed = await db.listDays('2026-09');
+  const want = [];
+  for (let i = 1; i <= 12; i++) want.push(`2026-09-${String(i).padStart(2, '0')}`);
+  const got = listed.map((d) => d.date).filter((d) => want.includes(d));
+  assert(got.length === 12, `ต้องครบ 12 วัน ได้ ${got.length}`);
+  assert(deepEqual(got, want), '12 วันต้องเรียงตามวันที่');
+  const sorted = listed.map((d) => d.date);
+  const copy = sorted.slice().sort();
+  assert(deepEqual(sorted, copy), 'listDays ทั้งเดือนต้องเรียง');
+  const d1 = await db.getDay('2026-09-01');
+  assert(d1 && d1.body && typeof d1.body.weight === 'number', 'fixture วันแรกต้องมีน้ำหนัก');
+  assert(Array.isArray(d1.meals) && d1.meals.length > 0, 'fixture วันแรกต้องมีมื้อ');
+});
+
+test('markPhotoUploaded และ getPhoto', async () => {
+  await db.open();
+  const blob = new Blob([new Uint8Array(8)], { type: 'image/jpeg' });
+  await db.putPhoto({ id: 'p_up_1999', date: '1999-01-03', blob, w: 4, h: 4, bytes: 8 });
+  const before = await db.getPhoto('p_up_1999');
+  assert(before && before.uploaded === false, 'เริ่มต้นยังไม่อัปโหลด');
+  await db.markPhotoUploaded('p_up_1999', 'photos/1999-01-03/p_up_1999.jpg');
+  const after = await db.getPhoto('p_up_1999');
+  assert(after.uploaded === true && after.remotePath === 'photos/1999-01-03/p_up_1999.jpg', 'ต้องติด uploaded + remotePath');
+});
+
+/* ---- เคส net.js (stub fetch เท่านั้น ห้ามยิงเน็ตจริง) ---- */
+
+function estItem(over = {}) {
+  return { name: 'ไข่ไก่', qty: '1 ฟอง', kcal: 75, p: 6, conf: 0.8, basis: 'std', needLabel: false, ...over };
+}
+function estMeal(over = {}) {
+  const items = over.items || [estItem()];
+  return {
+    items,
+    kcal: over.kcal != null ? over.kcal : items.reduce((s, it) => s + Number(it.kcal || 0), 0),
+    p: over.p != null ? over.p : items.reduce((s, it) => s + Number(it.p || 0), 0),
+    confidence: over.confidence != null ? over.confidence : 0.8,
+    warnings: over.warnings || [],
+    unclear: over.unclear || [],
+  };
+}
+function jsonRes(obj, status) {
+  return new Response(JSON.stringify(obj), { status, headers: { 'Content-Type': 'application/json' } });
+}
+async function withStubFetch(stub, fn) {
+  const orig = globalThis.fetch;
+  globalThis.fetch = stub;
+  try { return await fn(); }
+  finally { globalThis.fetch = orig; }
+}
+function lsHold(keys) {
+  const prev = {};
+  for (const k of keys) prev[k] = localStorage.getItem(k);
+  return {
+    restore() {
+      for (const k of keys) {
+        if (prev[k] == null) localStorage.removeItem(k);
+        else localStorage.setItem(k, prev[k]);
+      }
+    },
+  };
+}
+
+test('base64 UTF-8: ข้อความไทยยาว encode แล้ว decode กลับได้', () => {
+  const s = ('อาหารไทย ข้าวต้มโอ๊ต ไข่ไก่ อกไก่ ทัพพี ชต. 日本語 鮭 ').repeat(80);
+  let btoaThrew = false;
+  try { btoa(s); } catch (_) { btoaThrew = true; }
+  assert(btoaThrew, 'btoa ตรง ๆ ต้องพังกับอักษรไทย — ถ้าไม่พังแสดงว่าเทสต์นี้ไม่ได้พิสูจน์อะไร');
+  const b64 = net.utf8ToBase64(s);
+  assert(typeof b64 === 'string' && b64.length > 0, 'ต้องได้สตริง base64');
+  assert(!b64.includes('อาหาร'), 'ผล encode ห้ามเป็นข้อความดิบ');
+  assert(net.base64ToUtf8(b64) === s, 'decode กลับต้องได้ข้อความเดิม');
+});
+
+test('base64 ของ Blob 300 KB ไม่ throw', async () => {
+  const blob = new Blob([new Uint8Array(300 * 1024)], { type: 'image/jpeg' });
+  const b64 = await net.blobToBase64(blob);
+  assert(typeof b64 === 'string' && b64.length > 10000, `ต้องได้ base64 ยาว (ได้ ${b64 && b64.length})`);
+});
+
+test('validator ปฏิเสธ kcal 3000 / items ว่าง / conf=5 และผลรวมไม่ตรงใช้ Σitems', () => {
+  const rKcal = net.validateEstimate(estMeal({ items: [estItem({ kcal: 3000, p: 10 })], kcal: 3000, p: 10 }));
+  assert(!rKcal.ok, 'kcal 3000 ต่อมื้อต้องถูกปฏิเสธ');
+
+  const rEmpty = net.validateEstimate(estMeal({ items: [], kcal: 0, p: 0 }));
+  assert(!rEmpty.ok, 'items ว่างต้องถูกปฏิเสธ');
+
+  const rConf = net.validateEstimate(estMeal({ items: [estItem({ conf: 5 })], kcal: 75, p: 6 }));
+  assert(!rConf.ok, 'conf = 5 ต้องถูกปฏิเสธ');
+
+  const rSum = net.validateEstimate(estMeal({
+    items: [estItem({ kcal: 100, p: 1 }), estItem({ name: 'ข้าว', kcal: 100, p: 1 })],
+    kcal: 50,
+    p: 2,
+  }));
+  assert(rSum.ok, 'ผลรวมไม่ตรงต้องไม่ล้มทั้งก้อน');
+  assert(rSum.value && rSum.value.kcal === 200, `ต้องใช้ Σitems=200 ได้ ${rSum.value && rSum.value.kcal}`);
+});
+
+test('syncMerge: est ของ AI ไม่หายตอนดันขึ้น GitHub และ final ของ Claude ไม่ถูกทับ', () => {
+  const remote = baseDay({ rev: 3, meals: [{ id: 'm1', raw: ['ข้าว'], final: { kcal: 610 } }] });
+  const local = baseDay({ rev: 2, body: { weight: 90.1 }, meals: [{ id: 'm1', raw: ['ข้าว'], est: { kcal: 500 }, final: { kcal: 1 } }],
+    totals: { est: { kcal: 500 } }, ai: { model: 'x' } });
+  const m = net.syncMerge(remote, local);
+  assert(m.meals[0].est && m.meals[0].est.kcal === 500, 'est ของมื้อหาย');
+  assert(m.totals.est && m.totals.est.kcal === 500, 'totals.est หาย');
+  assert(m.ai && m.ai.model === 'x', 'ai หาย');
+  assert(m.meals[0].final.kcal === 610, 'final ของ Claude ถูกทับ');
+  assert(m.body.weight === 90.1, 'body ของ app หาย');
+  assert(m.rev === 4, 'rev ต้องขึ้นแค่ 1 (ได้ ' + m.rev + ')');
+});
+
+test('pushDay เจอ 404 จาก GET แล้วยัง PUT ได้ (ไม่ส่ง sha)', async () => {
+  await db.open();
+  const date = '1999-03-04';
+  await db.putDay(baseDay({
+    date,
+    note: 'ข้าวต้มโอ๊ต ไข่ไก่',
+    meals: [{ id: 'm_net404', key: 'เช้า', raw: ['ข้าวต้มโอ๊ต'] }],
+  }));
+  const hold = lsHold(['cal.gh_pat', 'cal.gh_repo']);
+  localStorage.setItem('cal.gh_pat', 'dummy-pat-not-real-xxxxxx');
+  localStorage.setItem('cal.gh_repo', 'owner/cal-test-data');
+  const puts = [];
+  let gets = 0;
+  try {
+    await withStubFetch(async (url, opts = {}) => {
+      const method = String((opts && opts.method) || 'GET').toUpperCase();
+      if (method === 'GET') {
+        gets++;
+        return jsonRes({ message: 'Not Found' }, 404);
+      }
+      if (method === 'PUT') {
+        puts.push(JSON.parse(opts.body));
+        return jsonRes({ content: { path: 'days/' + date + '.json' }, commit: { sha: 'x' } }, 201);
+      }
+      throw new Error('fetch ถูกเรียกด้วย method ไม่คาดคิด: ' + method);
+    }, async () => {
+      await net.pushDay(date);
+    });
+    assert(gets >= 1, 'ต้อง GET ก่อน PUT');
+    assert(puts.length === 1, `ต้อง PUT ครั้งเดียว ได้ ${puts.length}`);
+    assert(puts[0].sha == null, 'ไฟล์ใหม่ห้ามส่ง sha');
+    assert(puts[0].branch === 'main', 'ต้องระบุ branch main');
+    assert(typeof puts[0].content === 'string' && puts[0].content.length > 0, 'ต้องมี content base64');
+    const decoded = JSON.parse(net.base64ToUtf8(puts[0].content));
+    assert(decoded.note === 'ข้าวต้มโอ๊ต ไข่ไก่', 'content ต้อง encode UTF-8 แล้วมีข้อความไทย');
+  } finally {
+    hold.restore();
+  }
+});
+
+test('pushDay เจอ 409 แล้ว retry ไม่เกิน 3 รอบ', async () => {
+  await db.open();
+  const date = '1999-03-05';
+  await db.putDay(baseDay({
+    date,
+    meals: [{ id: 'm_net409', key: 'เช้า', raw: ['ไข่'] }],
+  }));
+  const hold = lsHold(['cal.gh_pat', 'cal.gh_repo']);
+  localStorage.setItem('cal.gh_pat', 'dummy-pat-not-real-xxxxxx');
+  localStorage.setItem('cal.gh_repo', 'owner/cal-test-data');
+  const remote = { schema: 2, date, rev: 1, meals: [], totals: {}, history: [], closed: false };
+  let gets = 0, puts = 0, calls = 0;
+  try {
+    await withStubFetch(async (url, opts = {}) => {
+      calls++;
+      const method = String((opts && opts.method) || 'GET').toUpperCase();
+      if (method === 'GET') {
+        gets++;
+        return jsonRes({
+          sha: 'sha-remote-' + gets,
+          encoding: 'base64',
+          content: net.utf8ToBase64(JSON.stringify(remote)),
+        }, 200);
+      }
+      if (method === 'PUT') {
+        puts++;
+        return jsonRes({ message: 'Conflict', sha: 'new' }, 409);
+      }
+      throw new Error('fetch method ไม่คาดคิด: ' + method);
+    }, async () => {
+      let threw = false;
+      try { await net.pushDay(date); } catch (_) { threw = true; }
+      assert(threw, 'หลังชน 3 รอบต้องเลิกแล้วคาไว้');
+    });
+    assert(gets <= 3 && puts <= 3, `รอบ GET/PUT ต้อง ≤ 3 (get ${gets} put ${puts})`);
+    assert(calls <= 6, `fetch รวมต้อง ≤ 6 (3 รอบ GET+PUT) ได้ ${calls}`);
+    assert(puts === 3 && gets === 3, `ต้องลองครบ 3 รอบ ได้ get ${gets} put ${puts}`);
+  } finally {
+    hold.restore();
+  }
+});
+
+test('ไม่มี key → ไม่ throw และไม่เรียก fetch เลย', async () => {
+  const hold = lsHold(['cal.or_key', 'cal.gh_pat', 'cal.gh_repo']);
+  localStorage.removeItem('cal.or_key');
+  localStorage.removeItem('cal.gh_pat');
+  localStorage.removeItem('cal.gh_repo');
+  let n = 0;
+  try {
+    await withStubFetch((...args) => {
+      n++;
+      throw new Error('ห้ามเรียก fetch เมื่อไม่มี key: ' + String(args[0]));
+    }, async () => {
+      await net.estimateMeal({ date: '1999-03-06', mealId: 'm1', raw: ['ไข่'], photoBlobs: [], foods: [] });
+      await net.pushDay('1999-03-06');
+      await net.pushPhoto('p_none');
+      await net.pullDay('1999-03-06');
+      const tor = await net.testOpenRouter();
+      const tgh = await net.testGitHub();
+      await net.flush('test');
+      assert(tor && tor.ok === false, 'testOpenRouter ต้องไม่ ok');
+      assert(tgh && tgh.ok === false, 'testGitHub ต้องไม่ ok');
+      assert(/ตั้งค่า/.test(String(tor.msg || '') + String(tgh.msg || '')), 'ต้องบอกว่ายังไม่ได้ตั้งค่า');
+    });
+    assert(n === 0, `ห้ามเรียก fetch (ถูกเรียก ${n} ครั้ง)`);
+  } finally {
+    hold.restore();
+  }
+});
+
+test('pushDay ถูกปฏิเสธเมื่อรูปของวันนั้นยัง uploaded=false', async () => {
+  await db.open();
+  const date = '1999-03-07';
+  const pid = 'p_net_pending';
+  await db.putDay(baseDay({
+    date,
+    meals: [{ id: 'm_net_photo', key: 'เช้า', raw: ['ไข่'], photos: [pid] }],
+  }));
+  const blob = new Blob([new Uint8Array(16)], { type: 'image/jpeg' });
+  await db.putPhoto({ id: pid, date, mealId: 'm_net_photo', blob, w: 8, h: 8, bytes: 16, uploaded: false });
+  const hold = lsHold(['cal.gh_pat', 'cal.gh_repo']);
+  localStorage.setItem('cal.gh_pat', 'dummy-pat-not-real-xxxxxx');
+  localStorage.setItem('cal.gh_repo', 'owner/cal-test-data');
+  let n = 0;
+  try {
+    await withStubFetch((...args) => {
+      n++;
+      throw new Error('ห้ามยิงเน็ตเมื่อรูปยังไม่ขึ้น: ' + String(args[0]));
+    }, async () => {
+      let threw = false;
+      try { await net.pushDay(date); } catch (_) { threw = true; }
+      assert(threw, 'ต้องถูกปฏิเสธเมื่อรูปยัง uploaded=false');
+    });
+    assert(n === 0, `ห้ามยิง GitHub ถ้ารูปยังไม่ขึ้น (fetch ${n})`);
+  } finally {
+    hold.restore();
+  }
+});
+
+let passed = 0;
+const failures = [];
+for (const c of cases) {
+  const li = document.createElement('li');
+  try {
+    await c.fn();
+    passed++;
+    li.className = 'ok';
+    li.textContent = `✅ ${c.name}`;
+  } catch (e) {
+    failures.push({ name: c.name, err: e });
+    li.className = 'fail';
+    li.textContent = `❌ ${c.name} — ${e && e.message ? e.message : e}`;
+  }
+  results.appendChild(li);
+}
+
+const total = cases.length;
+const line = `ผ่าน ${passed}/${total}`;
+summary.textContent = line;
+summary.className = passed === total ? 'ok' : 'fail';
+document.title = line + ' — ทดสอบ db.js';
+document.documentElement.dataset.pass = String(passed);
+document.documentElement.dataset.total = String(total);
+document.documentElement.dataset.ok = passed === total ? '1' : '0';
+if (failures.length) {
+  logEl.style.display = 'block';
+  logEl.textContent = failures.map((f) => f.name + '\n' + (f.err && f.err.stack ? f.err.stack : f.err)).join('\n\n');
+}
+</script>
+</body>
+</html>
