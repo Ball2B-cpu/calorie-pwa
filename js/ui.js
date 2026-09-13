@@ -11,7 +11,7 @@
    - สถิติเดือน/ขาดดุลสะสม/ค่าเฉลี่ย ใช้ final เท่านั้น · วัน est นับแยกว่า "ยังไม่ยืนยัน n วัน"
    - ผูก event ของปุ่มไว้ต้นฟังก์ชันเสมอ (บั๊ก 10 ก.ย.: ผูกท้ายสุด โค้ดกลางทางพัง = ปุ่มตาย)
    - id ต้องไม่ซ้ำกันทั้งหน้า (บั๊ก 10 ก.ย.: id="fNote" ซ้ำ 2 ที่ ทำให้ปุ่มเงียบทั้งฟอร์ม)
-   - รูป: <input type="file" accept="image/*" capture="environment"> ห้ามใช้ getUserMedia */
+   - รูป: <input type="file" accept="image/*" multiple> (ห้ามใส่ capture — iOS จะบังคับกล้องอย่างเดียว เลือกจากคลังไม่ได้) ห้ามใช้ getUserMedia */
 
 import * as db from './db.js';
 import * as net from './net.js';
@@ -1148,7 +1148,6 @@ function buildForm() {
     const pic = document.createElement('input');
     pic.type = 'file';
     pic.accept = 'image/*';
-    pic.setAttribute('capture', 'environment');
     pic.multiple = true;
     pic.className = 'fpic';
     pic.id = 'fPic' + i;
