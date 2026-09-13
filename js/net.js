@@ -554,7 +554,7 @@ function sumMealEst(meals) {
   return { kcal, p };
 }
 
-async function writeEstimate(date, mealId, estimate, model) {
+async function writeEstimate(date, mealId, estimate, model, sig) {
   const existing = await db.getDay(date);
   if (!existing) throw new NetError('ไม่พบวันที่ ' + date);
   const meals = Array.isArray(existing.meals) ? existing.meals : [];
@@ -571,7 +571,7 @@ async function writeEstimate(date, mealId, estimate, model) {
   const mealPatch = {
     id: mealId,
     items,
-    est: { kcal: estimate.kcal, p: estimate.p },
+    est: sig ? { kcal: estimate.kcal, p: estimate.p, sig } : { kcal: estimate.kcal, p: estimate.p },
   };
 
   const after = meals.map((m) => {
@@ -599,7 +599,7 @@ async function writeEstimate(date, mealId, estimate, model) {
 }
 
 /** ประเมินมื้อด้วยโมเดล vision */
-export async function estimateMeal({ date, mealId, raw, photoBlobs, foods }) {
+export async function estimateMeal({ date, mealId, raw, photoBlobs, foods, sig }) {
   if (!orKey()) return null;
   const foodSrc = foods || await loadFoodsCatalog();
   const { system: system0, userText } = fitPrompt(raw, foodSrc);
@@ -615,6 +615,7 @@ export async function estimateMeal({ date, mealId, raw, photoBlobs, foods }) {
   if (!models.length) throw new NetError('ยังไม่ได้ตั้งรายการโมเดล');
 
   let lastErr = null;
+  const modelErrs = [];
   for (const model of models) {
     const attempts = [
       { format: { type: 'json_schema', json_schema: ESTIMATE_JSON_SCHEMA }, extra: '' },
@@ -667,12 +668,15 @@ export async function estimateMeal({ date, mealId, raw, photoBlobs, foods }) {
         skipModel = true;
         break;
       }
-      await writeEstimate(date, mealId, checked.value, model);
+      await writeEstimate(date, mealId, checked.value, model, sig);
       return checked.value;
     }
     if (!skipModel && lastErr) throw lastErr;
+    if (lastErr) modelErrs.push(errText(lastErr).slice(0, 90));
+    lastErr = null;
   }
-  throw lastErr || new NetError('ประเมินมื้อไม่สำเร็จ');
+  // รายงานทุกโมเดล ไม่ใช่แค่ตัวสุดท้าย (เดิมเห็นแค่ qwen ไม่รู้ว่า gemini ล้มเพราะอะไร)
+  throw new NetError(modelErrs.length ? modelErrs.join(' · ') : 'ประเมินมื้อไม่สำเร็จ');
 }
 
 function ghHeaders(pat) {
@@ -916,15 +920,41 @@ async function runAiJob(job) {
       (Array.isArray(m.photos) && m.photos.length)
     )
   ));
+  // 13 ก.ย.: เดิมคิดใหม่ทุกมื้อทุกครั้ง และมื้อแรกที่ล้ม (กลางวัน "ไม่ได้กิน") ทำให้มื้อหลังจากนั้นไม่ถูกคิดเลย
+  // ใหม่: ข้ามมื้อที่มีเลขแล้วและข้อความ/รูปไม่เปลี่ยน · มื้อไหนล้มไปต่อมื้อถัดไป แล้วค่อยรายงานรวม
+  const errors = [];
   for (const meal of meals) {
-    const blobs = [];
-    for (const pid of meal.photos || []) {
-      if (!pid) continue;
-      const ph = await db.getPhoto(pid);
-      if (ph && ph.blob) blobs.push(ph.blob);
+    const sig = mealSig(meal);
+    if (meal.final && Number.isFinite(Number(meal.final.kcal))) continue;
+    if (meal.est && meal.est.sig === sig) continue;
+    try {
+      if (isNotEaten(meal)) {
+        await writeEstimate(date, meal.id, { items: [], kcal: 0, p: 0, confidence: 1, warnings: [], unclear: [] }, 'rule:not-eaten', sig);
+        continue;
+      }
+      const blobs = [];
+      for (const pid of meal.photos || []) {
+        if (!pid) continue;
+        const ph = await db.getPhoto(pid);
+        if (ph && ph.blob) blobs.push(ph.blob);
+      }
+      await estimateMeal({ date, mealId: meal.id, raw: meal.raw || [], photoBlobs: blobs, foods, sig });
+    } catch (e) {
+      if (e && (e.stopRound || e.stopKind || e.code === 'auth')) throw e;
+      errors.push(`${meal.key || meal.id}: ${errText(e)}`);
     }
-    await estimateMeal({ date, mealId: meal.id, raw: meal.raw || [], photoBlobs: blobs, foods });
   }
+  if (errors.length) throw new NetError(errors.join(' | '));
+}
+
+function mealSig(meal) {
+  return JSON.stringify([meal.raw || [], meal.photos || []]);
+}
+
+function isNotEaten(meal) {
+  if (Array.isArray(meal.photos) && meal.photos.length) return false;
+  const s = (meal.raw || []).join(' ').trim();
+  return /^(ไม่ได้กิน|ไม่กิน|งด|ข้าม|-|—)$/.test(s);
 }
 
 /** ทำคิวให้หมด (เรียกจาก app.js: start/online/visible/timer หรือปุ่มซิงก์) */
