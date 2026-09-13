@@ -70,7 +70,19 @@ async function boot() {
 
   if ('serviceWorker' in navigator) {
     try {
-      await navigator.serviceWorker.register('./sw.js');
+      const hadController = !!navigator.serviceWorker.controller;
+      // SW ใหม่ activate แล้ว แต่หน้านี้ยังรัน js เก่าอยู่ → โหลดใหม่ 1 ครั้ง (ยกเว้นกำลังอยู่หน้าจด กันพิมพ์ค้างหาย)
+      let reloaded = false;
+      navigator.serviceWorker.addEventListener('controllerchange', () => {
+        if (!hadController || reloaded) return;
+        let v = 'Day';
+        try { v = localStorage.getItem('cal.view') || 'Day'; } catch (_) {}
+        if (v === 'Form') return;
+        reloaded = true;
+        location.reload();
+      });
+      const reg = await navigator.serviceWorker.register('./sw.js');
+      try { reg.update(); } catch (_) {}
     } catch (e) { console.warn('[sw] register ไม่สำเร็จ', e); }
   }
 }

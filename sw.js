@@ -4,7 +4,7 @@
    - คำขอข้ามโดเมนอื่น (openrouter.ai / api.github.com) และคำขอที่ไม่ใช่ GET ไม่ถูกแตะเลย
      → ไม่มีทางได้คำตอบจากแคชมาหลอกว่าส่งสำเร็จ
    ⚠️ แก้ไฟล์ใดที่อยู่ใน SHELL ต้องเปลี่ยน VERSION ด้วยทุกครั้ง */
-const VERSION = 'cal-v14';
+const VERSION = 'cal-v15';
 const SHELL = [
   './',
   './index.html',
@@ -21,10 +21,12 @@ const SHELL = [
 ];
 
 self.addEventListener('install', (e) => {
+  // cache:'reload' = ข้าม HTTP cache ของเบราว์เซอร์ (GitHub Pages ส่ง max-age=600)
+  //   ไม่งั้นเวอร์ชันใหม่อาจเก็บ js เก่าเข้าแคชใหม่ → มือถือรันโค้ดเก่าทั้งที่ VERSION ขึ้นแล้ว (เจอ 13 ก.ย. cal-v14)
   // add ทีละไฟล์ + จับ error: ถ้าไฟล์ใดหาย (404) SW ยังติดตั้งได้ ไม่ล้มทั้งชุดแบบ addAll
   e.waitUntil(
     caches.open(VERSION)
-      .then((c) => Promise.all(SHELL.map((u) => c.add(u).catch((err) => console.warn('[sw] precache miss', u, err)))))
+      .then((c) => Promise.all(SHELL.map((u) => c.add(new Request(u, { cache: 'reload' })).catch((err) => console.warn('[sw] precache miss', u, err)))))
       .then(() => self.skipWaiting())
   );
 });
