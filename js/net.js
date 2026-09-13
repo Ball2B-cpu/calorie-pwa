@@ -769,6 +769,15 @@ export async function pushPhoto(photoId) {
 
 function ghReady() { return !!(ghPat() && ghRepo()); }
 
+/** repo ข้อมูลต้องไม่ใช่ repo โค้ด (public) — 13 ก.ย. บอลใส่ calorie-pwa ในช่อง repo แล้วแอพพยายามดันรูปอาหารขึ้น repo สาธารณะ
+ *  (รอดเพราะ token ผูกแค่ calorie-data) */
+function ghRepoProblem(repo) {
+  const name = String(repo || '').split('/').pop().toLowerCase();
+  if (name === 'calorie-pwa') return 'ช่อง repo ใส่ calorie-pwa (repo โค้ด เป็น public) — ต้องเป็น Ball2B-cpu/calorie-data';
+  if (!/^[^/\s]+\/[^/\s]+$/.test(String(repo || ''))) return 'ชื่อ repo ต้องเป็นรูป owner/name เช่น Ball2B-cpu/calorie-data';
+  return '';
+}
+
 async function runAiJob(job) {
   const date = job.date;
   const day = await db.getDay(date);
@@ -815,6 +824,13 @@ export async function flush(why) {
         skipKind.add('ai');
         lastState = 'queued';
         lastDetail = 'ยังไม่ได้ตั้งค่า';
+        setStatus(lastState, lastDetail);
+        continue;
+      }
+      if ((kind === 'gh-photo' || kind === 'gh-day') && ghReady() && ghRepoProblem(ghRepo())) {
+        skipKind.add('gh');
+        lastState = 'error';
+        lastDetail = ghRepoProblem(ghRepo());
         setStatus(lastState, lastDetail);
         continue;
       }
@@ -930,6 +946,7 @@ export async function testGitHub() {
   const pat = ghPat();
   const repo = ghRepo();
   if (!pat || !repo) return { ok: false, msg: 'ยังไม่ได้ตั้งค่า' };
+  if (ghRepoProblem(repo)) return { ok: false, msg: ghRepoProblem(repo) };
   try {
     const res = await fetch(`${GH_API}/repos/${repo}`, {
       headers: ghHeaders(pat),
@@ -945,6 +962,9 @@ export async function testGitHub() {
     try { data = await res.json(); } catch (_) { data = null; }
     const name = (data && (data.full_name || data.name)) || repo;
     const priv = data && data.private === true ? 'private' : 'public';
+    if (priv !== 'private') {
+      return { ok: false, msg: 'repo ' + name + ' เป็น public — ห้ามเก็บข้อมูลสุขภาพ ใช้ repo private (calorie-data)' };
+    }
     return { ok: true, msg: 'เข้าถึงได้ · ' + name + ' · ' + priv + ' · ลงท้าย ' + tail6(pat) };
   } catch (e) {
     return { ok: false, msg: (e && e.name === 'AbortError') ? 'หมดเวลารอ GitHub' : 'เชื่อม GitHub ไม่ได้' };
