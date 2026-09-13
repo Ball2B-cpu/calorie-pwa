@@ -1528,6 +1528,8 @@ async function writeFormNow(sending, opts) {
         }
       }
       await db.enqueue({ kind: 'gh-day', date });
+      // ส่งทันที — ไม่งั้นงานรอรอบ timer 5 นาที / เปิดแอพใหม่ (บอลกดส่งแล้วไม่มีอะไรเกิด 13 ก.ย.)
+      Promise.resolve(net.flush?.('submit')).catch((e) => console.warn('[sync] submit', e));
     }
     const t = new Date();
     if (!quiet) {
