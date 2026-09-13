@@ -58,6 +58,7 @@ const SYSTEM_PROMPT = `คุณประมาณแคลอรีและโ
 หน่วยที่ใช้จริง: ทัพพี (80 g) · ชต. · ชช. · ฟอง · ลูก
 
 ถ้ารายการตรงกับตารางอาหารด้านล่าง ใส่ foodId = id ในตาราง และ grams = กรัมที่กินจริง (ผู้ใช้พิมพ์กรัมมา ใช้ตามนั้นเป๊ะ · ไม่ได้บอก ประมาณจากรูป/หน่วยในตาราง) ตอบ basis:"label" หรือ "std" — แอพจะคูณเลขจากตารางเอง
+ถ้าในรูปมีตารางโภชนาการ (栄養成分表示 100gあたり) ของรายการนั้น ใส่ labelKcal100 / labelP100 ตามฉลาก (ไม่มีฉลาก = 0) — ค่าฉลากในรูปชนะตาราง · น้ำหนักแพ็ค (内容量/正味量 เช่น 212g) ใส่ใน qty แต่ grams ต้องเป็นปริมาณที่กินจริง ถ้าผู้ใช้ไม่บอกว่ากินหมดแพ็คไหม ให้กะจากรูปและใส่ในรายการ unclear
 ถ้าผู้ใช้พิมพ์แคลของรายการนั้นมาเอง (เช่น "11 กิโลแคล") ใส่ userKcal = เลขนั้น ไม่พิมพ์ = 0
 รายการที่ไม่มีในตาราง: foodId "" · grams ประมาณ · kcal/p ประมาณจากความรู้อาหารทั่วไป basis "guess"
 ห้ามให้ kcal 0 กับของที่มีพลังงานจริง (เช่น ปูอัด/カニカマ ~90 kcal ต่อ 100 g) — ไม่เห็นปริมาณให้ประมาณจากรูปแล้วใส่ conf ต่ำ
@@ -70,7 +71,7 @@ const SYSTEM_PROMPT = `คุณประมาณแคลอรีและโ
 ถ้ามีฉลากในรูป (ญี่ปุ่น) ให้อ่านค่าจากฉลากเป็นหลัก และคูณตามปริมาณที่กินจริง
 
 schema ผลลัพธ์:
-{"items":[{"name":"","qty":"","foodId":"","grams":0,"userKcal":0,"kcal":0,"p":0,"conf":0.0,"basis":"label|std|guess","needLabel":false}],"kcal":0,"p":0,"confidence":0.0,"warnings":[],"unclear":[]}`;
+{"items":[{"name":"","qty":"","foodId":"","grams":0,"userKcal":0,"labelKcal100":0,"labelP100":0,"kcal":0,"p":0,"conf":0.0,"basis":"label|std|guess","needLabel":false}],"kcal":0,"p":0,"confidence":0.0,"warnings":[],"unclear":[]}`;
 
 const ESTIMATE_JSON_SCHEMA = {
   name: 'meal_estimate',
@@ -90,13 +91,15 @@ const ESTIMATE_JSON_SCHEMA = {
             foodId: { type: 'string' },
             grams: { type: 'number' },
             userKcal: { type: 'number' },
+            labelKcal100: { type: 'number' },
+            labelP100: { type: 'number' },
             kcal: { type: 'number' },
             p: { type: 'number' },
             conf: { type: 'number' },
             basis: { type: 'string', enum: ['label', 'std', 'guess'] },
             needLabel: { type: 'boolean' },
           },
-          required: ['name', 'qty', 'foodId', 'grams', 'userKcal', 'kcal', 'p', 'conf', 'basis', 'needLabel'],
+          required: ['name', 'qty', 'foodId', 'grams', 'userKcal', 'labelKcal100', 'labelP100', 'kcal', 'p', 'conf', 'basis', 'needLabel'],
         },
       },
       kcal: { type: 'number' },
@@ -254,7 +257,8 @@ function matchFoods(raw, foods) {
 
 /**
  * คิดเลขจากตารางด้วยโค้ด ไม่ให้โมเดลคูณเอง (13 ก.ย.: ข้าว 150 g ได้ 201 แทน 252, ขิงดองที่บอลพิมพ์ 11 kcal ได้ 10)
- * ลำดับ: userKcal ที่ผู้ใช้พิมพ์ > ตาราง (foodId × grams/g) > ค่าที่โมเดลประมาณ
+ * ลำดับ: userKcal ที่ผู้ใช้พิมพ์ > ฉลากในรูป (labelKcal100 × grams) > ตาราง (foodId × grams/g) > ค่าที่โมเดลประมาณ
+ * (ปูอัด 13 ก.ย.: ฉลากในรูปเขียน 69 kcal/100g แต่ตารางทับเป็นค่ามาตรฐาน 90)
  * รวม kcal/p ของมื้อคิดใหม่จากรายการเสมอ
  */
 export function applyFoodTable(raw, foods) {
@@ -271,6 +275,14 @@ export function applyFoodTable(raw, foods) {
       it.kcal = Math.round(Number(f.kcal) * grams * perG);
       it.p = Math.round(Number(f.p) * grams * perG * 10) / 10;
       it.basis = f.src === 'label' ? 'label' : 'std';
+      changed = true;
+    }
+    const lk = Number(it.labelKcal100);
+    if (Number.isFinite(lk) && lk > 0 && grams > 0) {
+      it.kcal = Math.round(lk * grams / 100);
+      const lp = Number(it.labelP100);
+      if (Number.isFinite(lp) && lp > 0) it.p = Math.round(lp * grams / 10) / 10;
+      it.basis = 'label';
       changed = true;
     }
     const uk = Number(it.userKcal);

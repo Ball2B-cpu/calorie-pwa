@@ -463,6 +463,8 @@ test('applyFoodTable: คูณจากตารางเอง + เลขท�
   const k = out.items.map((x) => x.kcal);
   assert(k[0] === 252 && k[1] === 125 && k[2] === 11 && k[3] === 36, `ได้ ${k}`);
   assert(out.kcal === 424, `รวมต้อง 424 ได้ ${out.kcal}`);
+  const lab = net.applyFoodTable(estMeal({ items: [estItem({ foodId: 'rice_100', grams: 100, labelKcal100: 69, labelP100: 6.1, kcal: 90, p: 12 })], kcal: 90, p: 12 }), foods);
+  assert(lab.items[0].kcal === 69 && lab.items[0].p === 6.1, `ฉลากในรูปต้องชนะตาราง ได้ ${lab.items[0].kcal}`);
   const v = net.validateEstimate(out);
   assert(v.ok && v.value.kcal === 424 && v.value.items[0].grams === 150, 'ผ่าน validator แล้วเลขต้องคงเดิม');
 });
