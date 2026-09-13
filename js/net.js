@@ -784,6 +784,35 @@ export async function pushDay(date) {
   throw lastErr || new NetError('GitHub ชนกัน 3 รอบ ยังเขียนไม่ได้ จะลองใหม่ทีหลัง');
 }
 
+function isoDaysAgo(n) {
+  const d = new Date(Date.now() - n * 86400000);
+  const pad = (x) => String(x).padStart(2, '0');
+  return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`;
+}
+
+/** ดึงวันล่าสุด n วันที่ยังไม่ปิดยอดในเครื่อง → true ถ้ามีวันไหน rev เปลี่ยน */
+export async function pullRecent(n) {
+  let changed = false;
+  for (let i = 0; i < n; i++) {
+    const date = isoDaysAgo(i);
+    const local = await db.getDay(date);
+    if (local && local.closed) continue;
+    const before = local ? local.rev : null;
+    const after = await pullDay(date);
+    const doc = after && typeof after === 'object' ? after : await db.getDay(date);
+    if (doc && doc.rev !== before) changed = true;
+  }
+  return changed;
+}
+
+function refreshView() {
+  try {
+    let v = 'Day';
+    try { v = localStorage.getItem('cal.view') || 'Day'; } catch (_) {}
+    if (v !== 'Form') ui.onShow?.(v);   // หน้าฟอร์มห้ามวาดทับ บอลอาจกำลังพิมพ์
+  } catch (_) {}
+}
+
 export async function pullDay(date) {
   const pat = ghPat();
   const repo = ghRepo();
@@ -797,7 +826,25 @@ export async function pullDay(date) {
   }
   const local = await db.getDay(date);
   const merged = syncMerge(remote, local || { schema: 2, date });
+  // merge ทุกครั้ง rev +1 เสมอ → ถ้าเนื้อหาไม่ต่างจากในเครื่อง ไม่ต้องบันทึก (ไม่งั้น rev วิ่งทุก 5 นาที)
+  if (local && sameContent(merged, local)) return local;
   return db.putDay(merged);
+}
+
+function canon(v) {
+  if (Array.isArray(v)) return '[' + v.map(canon).join(',') + ']';
+  if (v && typeof v === 'object') {
+    return '{' + Object.keys(v).filter((k) => v[k] !== undefined).sort().map((k) => JSON.stringify(k) + ':' + canon(v[k])).join(',') + '}';
+  }
+  return JSON.stringify(v === undefined ? null : v);
+}
+
+export function sameContent(a, b) {
+  const strip = (d) => {
+    const { rev, updatedAt, updatedBy, history, savedAt, ...rest } = d || {};
+    return canon(rest);
+  };
+  return strip(a) === strip(b);
 }
 
 export async function pushPhoto(photoId) {
@@ -933,6 +980,16 @@ export async function flush(why) {
         }
       }
     }
+    // ดึงเลขที่ Claude ยืนยัน (final/closed) กลับมาที่มือถือ — เดิมไม่มีใครเรียก pullDay เลย
+    // เลขยืนยันจะไม่มาจนกว่าวันนั้นมีงาน gh-day ใหม่ (เจอ 13 ก.ย.)
+    if (ghReady() && !ghRepoProblem(ghRepo()) && !skipKind.has('gh')) {
+      try {
+        if (await pullRecent(3)) refreshView();
+      } catch (e) {
+        if (e && e.code === 'auth') { lastState = 'error'; lastDetail = errText(e); }
+      }
+    }
+    if (lastState === 'estimated') refreshView();
     const left = await db.listOutbox();
     if (left.length) {
       const detail = lastDetail === 'ยังไม่ได้ตั้งค่า' || lastState === 'error'

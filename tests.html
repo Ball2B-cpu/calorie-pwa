@@ -469,6 +469,16 @@ test('applyFoodTable: คูณจากตารางเอง + เลขท�
   assert(v.ok && v.value.kcal === 424 && v.value.items[0].grams === 150, 'ผ่าน validator แล้วเลขต้องคงเดิม');
 });
 
+test('pull ซ้ำ: เนื้อหาเท่าเดิมไม่นับว่าเปลี่ยน แต่ final ใหม่ต้องนับ', () => {
+  const remote = baseDay({ rev: 8, meals: [{ id: 'm1', raw: ['ข้าว'], est: { kcal: 433 }, final: { kcal: 531 } }] });
+  const local = baseDay({ rev: 7, meals: [{ id: 'm1', raw: ['ข้าว'], est: { kcal: 433 } }] });
+  const m1 = net.syncMerge(remote, local);
+  assert(m1.meals[0].final.kcal === 531, 'final ต้องเข้ามา');
+  assert(!net.sameContent(m1, local), 'final ใหม่ต้องนับว่าเปลี่ยน');
+  const m2 = net.syncMerge(m1, JSON.parse(JSON.stringify(m1)));
+  assert(net.sameContent(m2, m1), 'pull ซ้ำเนื้อหาเดิมต้องนับว่าเท่ากัน');
+});
+
 test('syncMerge: est ของ AI ไม่หายตอนดันขึ้น GitHub และ final ของ Claude ไม่ถูกทับ', () => {
   const remote = baseDay({ rev: 3, meals: [{ id: 'm1', raw: ['ข้าว'], final: { kcal: 610 } }] });
   const local = baseDay({ rev: 2, body: { weight: 90.1 }, meals: [{ id: 'm1', raw: ['ข้าว'], est: { kcal: 500 }, final: { kcal: 1 } }],
