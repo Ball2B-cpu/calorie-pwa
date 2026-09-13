@@ -829,6 +829,30 @@ export async function pullRecent(n) {
   return changed;
 }
 
+/** ดึงทุกวันใน repo ที่ไฟล์เปลี่ยนตั้งแต่ดึงครั้งก่อน (เทียบ sha ของ GitHub) → true ถ้ามีวันไหนเปลี่ยน
+ *  เดิม pullRecent(3) ดึงแค่ 3 วันล่าสุด → ข้อมูลเก่าที่ย้ายจาก artifact และ Garmin ที่เติมหลังปิดยอดไม่มาถึงมือถือ (13 ก.ย.)
+ *  เรียก API แค่ 1 ครั้ง (list โฟลเดอร์) ถ้าไม่มีอะไรเปลี่ยน */
+export async function pullChanged() {
+  const pat = ghPat();
+  const repo = ghRepo();
+  if (!pat || !repo) return false;
+  const list = await ghGet(repo, pat, 'days');
+  if (!Array.isArray(list)) return false;
+  let seen = {};
+  try { seen = JSON.parse(localStorage.getItem('cal.pulledShas') || '{}') || {}; } catch (_) {}
+  let changed = false;
+  for (const f of list) {
+    const m = /^(\d{4}-\d{2}-\d{2})\.json$/.exec((f && f.name) || '');
+    if (!m || seen[m[1]] === f.sha) continue;
+    const before = await db.getDay(m[1]);
+    const after = await pullDay(m[1]);
+    if (!before || (after && after.rev !== before.rev)) changed = true;
+    seen[m[1]] = f.sha;
+    try { localStorage.setItem('cal.pulledShas', JSON.stringify(seen)); } catch (_) {}
+  }
+  return changed;
+}
+
 function refreshView() {
   try {
     let v = 'Day';
@@ -1035,7 +1059,7 @@ export async function flush(why) {
     // เลขยืนยันจะไม่มาจนกว่าวันนั้นมีงาน gh-day ใหม่ (เจอ 13 ก.ย.)
     if (ghReady() && !ghRepoProblem(ghRepo()) && !skipKind.has('gh')) {
       try {
-        if (await pullRecent(3)) refreshView();
+        if (await pullChanged()) refreshView();
       } catch (e) {
         if (e && e.code === 'auth') { lastState = 'error'; lastDetail = errText(e); }
       }
