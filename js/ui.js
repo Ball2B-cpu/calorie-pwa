@@ -28,6 +28,7 @@ const STATE_LABEL = {
   estimated: 'AI ประมาณ',
   confirmed: '✓ Claude ยืนยันแล้ว',
   error: 'ส่งไม่สำเร็จ',
+  synced: 'ส่งครบแล้ว',
 };
 const DEFAULT_PROFILE = { limit: 1800, tdee: 2450, proteinGoal: 140, goalWeight: 87.5 };
 

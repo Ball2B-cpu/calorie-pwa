@@ -858,7 +858,8 @@ export async function flush(why) {
         : ('ค้าง ' + left.length + ' งาน');
       setStatus('queued', detail);
     } else if (lastState === 'error') setStatus('error', lastDetail);
-    else setStatus(lastState === 'sending' ? 'estimated' : lastState, lastDetail || 'คิวว่าง');
+    else if (lastState === 'sending') setStatus('synced', 'คิวว่าง');
+    else setStatus(lastState, lastDetail || 'คิวว่าง');
   } finally {
     flushing = false;
   }
