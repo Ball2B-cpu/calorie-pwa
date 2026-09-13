@@ -170,54 +170,42 @@ function visibleMeals(d) {
 
 /** เลขแสดงผลรายวัน: final → est → Σ มื้อ.est → Σ มื้อที่คำนวณได้ */
 function kcalOf(d) {
+  // 13 ก.ย.: เดิม totals.est ชนะ → มื้อที่ Claude ยืนยันแล้ว (531) ไม่ถูกนับ ยอดวันโชว์ ~388
+  // ใหม่: ปิดยอด/มี totals.final ใช้ final · ไม่งั้นรวมรายมื้อ (final ?? est ?? Σรายการ)
   if (!d) return { v: 0, est: false };
   const fin = layer(d.totals && d.totals.final);
   if (fin) return { v: fin.kcal, est: false };
-  const est = layer(d.totals && d.totals.est);
-  if (est) return { v: est.kcal, est: true };
-  let fromEst = 0, anyEst = false;
-  for (const m of visibleMeals(d)) {
-    const e = layer(m.est);
-    if (!e) continue;
-    anyEst = true;
-    fromEst += e.kcal;
-  }
-  if (anyEst) return { v: fromEst, est: true };
-  let sum = 0, any = false, allEst = true;
+  let sum = 0, any = false, anyEst = false;
   for (const m of visibleMeals(d)) {
     const n = mealNums(m);
-    if (!n.kcal && !n.p && !(m.items || []).length) continue;
+    if (!n.kcal && !n.p && !layer(m.final) && !layer(m.est)) continue;
     any = true;
     sum += n.kcal;
-    if (!n.est) allEst = false;
+    if (n.est) anyEst = true;
   }
-  if (any) return { v: sum, est: allEst };
+  if (any) return { v: sum, est: anyEst };
+  const est = layer(d.totals && d.totals.est);
+  if (est) return { v: est.kcal, est: true };
   return { v: 0, est: false };
 }
 
 function pOf(d) {
+  // 13 ก.ย.: เดิม totals.est ชนะ → มื้อที่ Claude ยืนยันแล้ว (531) ไม่ถูกนับ ยอดวันโชว์ ~388
+  // ใหม่: ปิดยอด/มี totals.final ใช้ final · ไม่งั้นรวมรายมื้อ (final ?? est ?? Σรายการ)
   if (!d) return { v: 0, est: false };
   const fin = layer(d.totals && d.totals.final);
   if (fin) return { v: fin.p, est: false };
-  const est = layer(d.totals && d.totals.est);
-  if (est) return { v: est.p, est: true };
-  let fromEst = 0, anyEst = false;
-  for (const m of visibleMeals(d)) {
-    const e = layer(m.est);
-    if (!e) continue;
-    anyEst = true;
-    fromEst += e.p;
-  }
-  if (anyEst) return { v: fromEst, est: true };
-  let sum = 0, any = false, allEst = true;
+  let sum = 0, any = false, anyEst = false;
   for (const m of visibleMeals(d)) {
     const n = mealNums(m);
-    if (!n.kcal && !n.p && !(m.items || []).length) continue;
+    if (!n.kcal && !n.p && !layer(m.final) && !layer(m.est)) continue;
     any = true;
     sum += n.p;
-    if (!n.est) allEst = false;
+    if (n.est) anyEst = true;
   }
-  if (any) return { v: sum, est: allEst };
+  if (any) return { v: Math.round(sum * 10) / 10, est: anyEst };
+  const est = layer(d.totals && d.totals.est);
+  if (est) return { v: est.p, est: true };
   return { v: 0, est: false };
 }
 
@@ -495,13 +483,15 @@ function paintMeals(d) {
 
     const mnums = el('span', 'mnums');
     const kb = el('b');
-    kb.textContent = fmt(nums.kcal);
+    // ยังไม่มีเลขจาก AI/Claude เลย → โชว์ "—" ไม่ใช่ 0 (0 ดูเหมือนคิดแล้วว่าไม่มีแคล)
+    const noNum = !layer(m.final) && !layer(m.est) && !(m.items || []).some((it) => itemNums(it));
+    kb.textContent = noNum ? '—' : fmt(nums.kcal);
     markEst(kb, nums.est, true);
     mnums.append(kb, document.createTextNode(' kcal'));
     const pline = el('span');
     pline.append(document.createTextNode('P '));
     const pb = el('span');
-    pb.textContent = fmtP(nums.p);
+    pb.textContent = noNum ? '—' : fmtP(nums.p);
     markEst(pb, nums.est, true);
     pline.append(pb, document.createTextNode(' g'));
     mnums.appendChild(pline);

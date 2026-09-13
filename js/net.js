@@ -416,9 +416,14 @@ function parseJsonContent(text) {
   }
   try {
     return JSON.parse(s);
-  } catch (_) {
-    throw new NetError('โมเดลไม่ได้ตอบ JSON', { raw: s.slice(0, 400) });
+  } catch (_) {}
+  // มีข้อความนำหน้า/ตามหลัง JSON → ตัดเอาช่วง { ... } ที่ใหญ่สุด
+  const i = s.indexOf('{');
+  const j = s.lastIndexOf('}');
+  if (i >= 0 && j > i) {
+    try { return JSON.parse(s.slice(i, j + 1)); } catch (_) {}
   }
+  throw new NetError('โมเดลไม่ได้ตอบ JSON: ' + s.slice(0, 60).replace(/\s+/g, ' '), { raw: s.slice(0, 400) });
 }
 
 function lookRate(res) {
@@ -496,7 +501,10 @@ async function orChat({ model, system, userParts, responseFormat }) {
   const body = {
     model,
     temperature: 0,
-    max_tokens: 1500,
+    // 13 ก.ย.: gemini-3.8-flash คิดก่อนตอบ (reasoning) กินโควตา max_tokens 1500 จน JSON ถูกตัดกลางคัน
+    // → "โมเดลไม่ได้ตอบ JSON" · เพิ่มเพดาน + ขอคิดน้อย (โมเดลที่ไม่รองรับ OpenRouter จะเมินเอง)
+    max_tokens: 6000,
+    reasoning: { effort: 'low', exclude: true },
     messages: [
       { role: 'system', content: system },
       { role: 'user', content: userParts },
@@ -526,9 +534,12 @@ function extractContent(text) {
   try { data = JSON.parse(text); } catch (_) {
     throw new NetError('OpenRouter ตอบไม่ใช่ JSON', { raw: String(text).slice(0, 200) });
   }
-  const content = data && data.choices && data.choices[0] && data.choices[0].message
-    ? data.choices[0].message.content
-    : null;
+  const ch = data && data.choices && data.choices[0];
+  let content = ch && ch.message ? ch.message.content : null;
+  if (Array.isArray(content)) content = content.map((c) => (c && (c.text ?? c.content)) || '').join('');
+  if (ch && ch.finish_reason === 'length') {
+    throw new NetError('โมเดลตอบยาวเกินเพดานจน JSON ถูกตัด', { raw: String(content || '').slice(-200) });
+  }
   return content;
 }
 
@@ -641,11 +652,20 @@ export async function estimateMeal({ date, mealId, raw, photoBlobs, foods }) {
         skipModel = true;
         break;
       }
-      const content = extractContent(text);
-      const parsed = parseJsonContent(content);
-      const checked = validateEstimate(applyFoodTable(parsed, foodSrc));
-      if (!checked.ok) {
-        throw new NetError(`ผล AI ไม่ผ่านตัวตรวจ: ${checked.error}`, { raw: typeof content === 'string' ? content : JSON.stringify(parsed) });
+      let checked;
+      try {
+        const content = extractContent(text);
+        const parsed = parseJsonContent(content);
+        checked = validateEstimate(applyFoodTable(parsed, foodSrc));
+        if (!checked.ok) {
+          throw new NetError(`ผล AI ไม่ผ่านตัวตรวจ: ${checked.error}`, { raw: JSON.stringify(parsed).slice(0, 400) });
+        }
+      } catch (e) {
+        // คำตอบพัง → ลองรูปแบบถัดไป/โมเดลถัดไป แทนการล้มทั้งงาน (ข้อความ error บอกชื่อโมเดลด้วย)
+        lastErr = new NetError(`${model}: ${errText(e)}`, { raw: e && e.raw });
+        if (a < attempts.length - 1) continue;
+        skipModel = true;
+        break;
       }
       await writeEstimate(date, mealId, checked.value, model);
       return checked.value;
