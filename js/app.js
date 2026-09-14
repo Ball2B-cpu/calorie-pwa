@@ -42,6 +42,75 @@ function wireSync() {
   flush('start');
 }
 
+/* ดึงหน้าจอลงจากบนสุดแล้วปล่อย = รีเฟรช (เช็คโค้ดใหม่ + ดึงข้อมูลใหม่) แทนปิด-เปิดแอพเอง
+   ทำงานเองทั้งหมด (ไม่พึ่ง native pull-to-refresh ของ iOS ซึ่งใน standalone PWA ไม่มีให้) */
+function wirePullRefresh() {
+  const appEl = $('app'), ind = $('pullRefresh'), icon = $('pullRefreshIcon'), text = $('pullRefreshText');
+  if (!appEl || !ind || !icon || !text) return;
+  const MAX = 88, TRIGGER = 62;
+  let startY = 0, curPull = 0, dragging = false, refreshing = false;
+
+  const setPull = (px) => {
+    curPull = px;
+    appEl.style.transform = px ? `translateY(${px}px)` : '';
+    ind.style.opacity = px > 2 ? String(Math.min(px / TRIGGER, 1)) : '0';
+    ind.style.transform = `translateY(${Math.min(px, MAX) - 40}px)`;
+    if (!refreshing) text.textContent = px >= TRIGGER ? 'ปล่อยเพื่อรีเฟรช' : 'ดึงลงเพื่อรีเฟรช';
+    icon.textContent = px >= TRIGGER ? '↑' : '↓';
+  };
+  const snapBack = () => {
+    appEl.style.transition = 'transform .25s cubic-bezier(.2,.8,.2,1)';
+    ind.style.transition = 'transform .25s ease, opacity .2s ease';
+    setPull(0);
+    setTimeout(() => { appEl.style.transition = ''; ind.style.transition = ''; }, 260);
+  };
+
+  document.addEventListener('touchstart', (e) => {
+    if (refreshing || window.scrollY > 0) { dragging = false; return; }
+    if (e.target?.closest?.('#estDetail, #foodSuggest, input, textarea, select')) { dragging = false; return; }
+    startY = e.touches[0].clientY;
+    dragging = true;
+  }, { passive: true });
+
+  document.addEventListener('touchmove', (e) => {
+    if (!dragging || refreshing) return;
+    const dy = e.touches[0].clientY - startY;
+    if (dy <= 0 || window.scrollY > 0) { if (curPull) snapBack(); dragging = false; return; }
+    appEl.style.transition = 'none';
+    ind.style.transition = 'none';
+    setPull(Math.min(dy * 0.45, MAX));
+    e.preventDefault();
+  }, { passive: false });
+
+  document.addEventListener('touchend', () => {
+    if (!dragging) return;
+    dragging = false;
+    if (curPull >= TRIGGER) doRefresh(); else snapBack();
+  });
+  document.addEventListener('touchcancel', () => { if (dragging) { dragging = false; snapBack(); } });
+
+  async function doRefresh() {
+    refreshing = true;
+    icon.classList.add('spin');
+    icon.textContent = '⟳';
+    text.textContent = 'กำลังรีเฟรช…';
+    appEl.style.transition = 'transform .2s ease';
+    ind.style.transition = 'transform .2s ease, opacity .2s ease';
+    setPull(48);
+    try {
+      try { const reg = await navigator.serviceWorker?.getRegistration?.(); if (reg) await reg.update(); } catch (_) {}
+      try { await net.flush?.('pull'); } catch (e) { console.warn('[pull-refresh] flush', e); }
+      let v = 'Day';
+      try { v = localStorage.getItem('cal.view') || 'Day'; } catch (_) {}
+      ui.onShow?.(v);
+    } finally {
+      icon.classList.remove('spin');
+      refreshing = false;
+      snapBack();
+    }
+  }
+}
+
 /* ระหว่างที่ยังสร้างไม่เสร็จ: โมดูลที่ยังไม่ทำจะ throw 'ยังไม่ทำ'
    ต้องไม่ทำให้แอพเปิดไม่ขึ้น (ไม่งั้นทดสอบ PWA/ออฟไลน์ไม่ได้เลย) — จับไว้แล้วบอกสถานะ */
 async function tryStep(label, fn) {
@@ -61,6 +130,7 @@ async function boot() {
   show(VIEWS.includes(v) ? v : 'Day');
   document.documentElement.setAttribute('data-booted', '1');   // บอก error boundary ว่ารอดแล้ว
   wireSync();
+  wirePullRefresh();
 
   const st = $('syncStatus');
   if (st && !(ok.db && ok.ui)) {
