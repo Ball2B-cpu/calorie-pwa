@@ -130,6 +130,7 @@ class NetError extends Error {
 }
 
 let flushing = false;
+let flushJob = null;
 let lastGhWriteAt = 0;
 let foodsCache = null;
 
@@ -1017,18 +1018,24 @@ function isNotEaten(meal) {
   return /^(ไม่ได้กิน|ไม่กิน|งด|ข้าม|-|—)$/.test(s);
 }
 
-/** ทำคิวให้หมด (เรียกจาก app.js: start/online/visible/timer หรือปุ่มซิงก์) */
-export async function flush(why) {
-  if (flushing) return;
+/** ทำคิวให้หมด (เรียกจาก app.js: start/online/visible/timer หรือปุ่มคำนวณ)
+ *  คืน Promise ที่ค้างจนรอบนั้นจบจริง — ปุ่ม "คำนวณแคล" รอผลได้ (เดิมถ้ามีรอบค้างอยู่จะคืนทันทีแบบเงียบ ๆ) */
+export function flush(why) {
+  if (flushing) return flushJob || Promise.resolve();
+  flushing = true;
+  flushJob = flushOnce(why).finally(() => { flushing = false; flushJob = null; });
+  return flushJob;
+}
+
+async function flushOnce(why) {
   if (typeof navigator !== 'undefined' && navigator.onLine === false) {
     setStatus('queued', 'ออฟไลน์');
     return;
   }
-  flushing = true;
   const skipKind = new Set();
   let lastState = 'sending';
   let lastDetail = why ? String(why) : '';
-  try {
+  {
     setStatus('sending', lastDetail);
     const jobs = await db.listOutbox();
     for (const job of jobs) {
@@ -1109,8 +1116,6 @@ export async function flush(why) {
     } else if (lastState === 'error') setStatus('error', lastDetail);
     else if (lastState === 'sending') setStatus('synced', 'คิวว่าง');
     else setStatus(lastState, lastDetail || 'คิวว่าง');
-  } finally {
-    flushing = false;
   }
 }
 

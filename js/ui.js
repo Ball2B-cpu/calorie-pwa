@@ -1274,6 +1274,7 @@ function fillForm(o) {
     setOutsideChip(i, mealOutside[i]);
   }
   renderSent(o);
+  renderResult(o);
 }
 
 function renderSent(o) {
@@ -1283,19 +1284,62 @@ function renderSent(o) {
   node.className = 'fsent';
   const sentAt = o && o.submittedAt;
   if (!sentAt) {
-    node.textContent = 'ยังไม่ได้ส่งคำนวณ — กดบันทึกไว้ก่อนได้ ข้อมูลไม่หาย';
+    node.textContent = 'ยังไม่ได้คำนวณ — กดบันทึกไว้ก่อนได้ ข้อมูลไม่หาย';
     return;
   }
   const dirty = !!(o.savedAt && o.savedAt > sentAt);
   if (dirty) node.classList.add('dirty');
   if (dirty) {
-    node.appendChild(document.createTextNode('มีการแก้หลังส่ง — กดส่งอีกครั้ง'));
-    const b = el('b', '', ' · ส่งล่าสุด ' + hhmm(sentAt));
+    node.appendChild(document.createTextNode('มีการแก้หลังคำนวณ — กดคำนวณอีกครั้ง'));
+    const b = el('b', '', ' · คำนวณล่าสุด ' + hhmm(sentAt));
     node.appendChild(b);
   } else {
-    node.appendChild(document.createTextNode('ส่งคำนวณแล้วตอน '));
+    node.appendChild(document.createTextNode('คำนวณแล้วตอน '));
     node.appendChild(el('b', '', hhmm(sentAt)));
   }
+}
+
+/** ผลคำนวณใต้ปุ่ม — วาดเองในหน้าฟอร์ม (refreshView ของ net.js ห้ามวาดทับหน้านี้ บอลอาจกำลังพิมพ์)
+ *  msg = ข้อความระหว่างรอ · o = เอกสารวันนั้นหลัง AI คิดเสร็จ */
+function renderResult(o, msg) {
+  const node = $('fResult');
+  if (!node) return;
+  node.textContent = '';
+  node.className = 'fresult';
+  if (msg) {
+    node.hidden = false;
+    node.appendChild(el('div', 'fr-wait', msg));
+    return;
+  }
+  if (!o) { node.hidden = true; return; }
+  const rows = [];
+  let pSum = 0;
+  for (const m of visibleMeals(o)) {
+    const n = mealNums(m);
+    if (!n.kcal && !n.p) continue;
+    pSum += n.p || 0;
+    rows.push({ name: m.key || 'มื้ออื่น', kcal: n.kcal, p: n.p, est: n.est });
+  }
+  if (!rows.length) {
+    node.hidden = false;
+    node.appendChild(el('div', 'fr-wait', 'ยังไม่ได้เลขจาก AI — เช็คเน็ต/คีย์ในหน้าตั้งค่า แล้วกดคำนวณอีกครั้ง'));
+    return;
+  }
+  const tot = kcalOf(o);
+  const top = el('div', 'fr-top');
+  top.appendChild(el('span', 'fr-k' + (tot.est ? ' est' : ''), fmt(tot.v)));   // "~" มาจาก .est::before ใน css ห้ามเติมซ้ำ
+  top.appendChild(el('span', 'fr-u', 'kcal วันนี้ · โปรตีน ' + fmtP(pSum) + ' g'));
+  node.appendChild(top);
+  const list = el('div', 'fr-list');
+  for (const r of rows) {
+    const line = el('div', 'fr-row');
+    line.appendChild(el('span', 'fr-n', r.name));
+    line.appendChild(el('span', 'fr-v' + (r.est ? ' est' : ''), fmt(r.kcal) + ' kcal'));
+    list.appendChild(line);
+  }
+  node.appendChild(list);
+  if (rows.some((r) => r.est)) node.appendChild(el('div', 'fr-note', '~ = เลขประมาณจาก AI ยังไม่ยืนยัน'));
+  node.hidden = false;
 }
 
 function collectBody() {
@@ -1502,7 +1546,7 @@ async function writeFormNow(sending, opts) {
 
   $('fSave') && ($('fSave').disabled = true);
   $('fSend') && ($('fSend').disabled = true);
-  if (!quiet) sayForm(sending ? 'กำลังส่ง…' : 'กำลังบันทึก…');
+  if (!quiet) sayForm(sending ? 'กำลังคำนวณ…' : 'กำลังบันทึก…');
   try {
     let existing = null;
     try { existing = await db.getDay(date); } catch (_) { existing = null; }
@@ -1539,18 +1583,44 @@ async function writeFormNow(sending, opts) {
         }
       }
       await db.enqueue({ kind: 'gh-day', date });
-      // ส่งทันที — ไม่งั้นงานรอรอบ timer 5 นาที / เปิดแอพใหม่ (บอลกดส่งแล้วไม่มีอะไรเกิด 13 ก.ย.)
-      Promise.resolve(net.flush?.('submit')).catch((e) => console.warn('[sync] submit', e));
-    }
-    const t = new Date();
-    if (!quiet) {
-      sayForm((sending ? 'ส่งแล้ว ' : 'บันทึกแล้ว ') + pad2(t.getHours()) + ':' + pad2(t.getMinutes()));
     }
     renderSent(saved);
     curDate = date;
+    if (sending) {
+      // 16 ก.ย.: ปุ่มนี้คือ "คำนวณแคล" — รอ AI คิดจนจบแล้ววาดเลขให้ดูตรงนี้เลย
+      //   (เดิมยิงคิวแล้วปล่อย refreshView ข้ามหน้าฟอร์มเสมอ บอลต้องรีเฟรชแอพเองถึงจะเห็นเลข)
+      renderResult(null, 'กำลังคำนวณ… AI กำลังอ่านรูปและรายการอาหาร');
+      // วนได้ถึง 3 รอบ: ถ้ามีรอบซิงก์ค้างอยู่ก่อนกด flush จะคืน promise ของรอบนั้น
+      //   ซึ่งอาจเริ่มก่อนงานของเราเข้าคิว → งาน ai ของวันนี้ยังค้าง ต้องยิงรอบใหม่
+      for (let round = 0; round < 3; round++) {
+        try {
+          await net.flush?.('submit');
+        } catch (e) {
+          console.warn('[sync] submit', e);
+          break;
+        }
+        let left = [];
+        try { left = await db.listOutbox(); } catch (_) { left = []; }
+        const job = left.find((j) => j && j.kind === 'ai' && j.date === date);
+        if (!job) break;
+        if ((job.tries || 0) > 0) break;   // ลองแล้วพัง — อย่ายิง AI ซ้ำเปลืองโทเคน ให้คิวไปต่อเอง
+      }
+      let after = null;
+      try { after = await db.getDay(date); } catch (_) { after = null; }
+      renderResult(after || saved);
+      if (!quiet) {
+        const n = kcalOf(after || saved);
+        sayForm(n.v ? ('คำนวณแล้ว ' + (n.est ? '~' : '') + fmt(n.v) + ' kcal') : 'ส่งแล้ว รอเลขจาก AI');
+      }
+      return;
+    }
+    const t = new Date();
+    if (!quiet) {
+      sayForm('บันทึกแล้ว ' + pad2(t.getHours()) + ':' + pad2(t.getMinutes()));
+    }
   } catch (e) {
     if (!quiet) {
-      sayForm((sending ? 'ส่งไม่สำเร็จ: ' : 'บันทึกไม่สำเร็จ: ') + ((e && e.message) || 'ลองใหม่อีกครั้ง'), true);
+      sayForm((sending ? 'คำนวณไม่สำเร็จ: ' : 'บันทึกไม่สำเร็จ: ') + ((e && e.message) || 'ลองใหม่อีกครั้ง'), true);
     }
   } finally {
     $('fSave') && ($('fSave').disabled = false);
@@ -1594,6 +1664,7 @@ async function renderForm() {
     sayForm('โหลดของที่จดไว้แล้วมาให้');
   } else {
     renderSent(null);
+    renderResult(null);
     sayForm('วันนี้ยังไม่มีที่จดไว้');
   }
   updateDelta();

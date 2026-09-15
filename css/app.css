@@ -407,6 +407,18 @@ button{font:inherit;color:inherit}
 .fsent b{font-weight:600;color:var(--eaten);font-family:"IBM Plex Mono",ui-monospace,monospace}
 .fsent.dirty{color:var(--warn);background:var(--warn-wash);border-radius:10px;padding:9px 11px}
 .fsent.dirty b{color:var(--warn)}
+/* ผลคำนวณใต้ปุ่ม (cal-v22) — เห็นเลขทันทีหลังกด "คำนวณแคล" ไม่ต้องรีเฟรชแอพ */
+.fresult{border:1px solid var(--line);border-radius:12px;padding:11px 12px;background:var(--track);display:flex;flex-direction:column;gap:7px}
+.fr-wait{font-size:12.5px;color:var(--muted)}
+.fr-top{display:flex;align-items:baseline;gap:8px;flex-wrap:wrap}
+.fr-k{font-family:"IBM Plex Mono",ui-monospace,monospace;font-size:26px;font-weight:600;color:var(--eaten);line-height:1}
+.fr-k.est,.fr-v.est{color:var(--warn)}   /* เลขยังไม่ยืนยัน = สีเดียวกับที่อื่นในแอพ */
+.fr-u{font-size:11.5px;color:var(--muted)}
+.fr-list{display:flex;flex-direction:column;gap:3px}
+.fr-row{display:flex;justify-content:space-between;gap:10px;font-size:12.5px}
+.fr-n{color:var(--muted)}
+.fr-v{font-family:"IBM Plex Mono",ui-monospace,monospace;font-weight:600;color:var(--eaten)}
+.fr-note{font-size:11px;color:var(--faint)}
 .fstatus{font-size:11.5px;color:var(--muted);text-align:right;min-height:1.2em;flex:0 1 auto}
 .fstatus.err{color:var(--over)}
 .fpic{position:absolute;width:1px;height:1px;opacity:0;overflow:hidden}
