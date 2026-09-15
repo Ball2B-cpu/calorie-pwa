@@ -4,8 +4,9 @@
 import * as db from './db.js';
 import * as ui from './ui.js';
 import * as net from './net.js';
+import * as extras from './ui-1a.js';
 
-const VIEWS = ['Day', 'Month', 'Form', 'Settings'];
+const VIEWS = ['Day', 'Month', 'Form', 'Body', 'Settings'];
 const $ = (id) => document.getElementById(id);
 
 export function show(which) {
@@ -124,6 +125,7 @@ async function tryStep(label, fn) {
 
 async function boot() {
   const ok = { db: await tryStep('db.open', () => db.open()), ui: await tryStep('ui.init', () => ui.init?.()) };
+  await tryStep('extras.init', () => extras.initExtras());
   wireTabs();
   let v = 'Day';
   try { v = localStorage.getItem('cal.view') || 'Day'; } catch (_) {}

@@ -615,6 +615,7 @@ async function paintDay() {
   setDayState(d);
   paintMeals(d);
   hideEstDetail();
+  try { const x = await import('./ui-1a.js'); x.afterDay(d, { eaten: eaten.v }); } catch (_) {}
   } catch (_) {
     if (gen !== dayGen) return;
     console.warn('[ui] renderDay failed');
@@ -779,6 +780,8 @@ async function paintMonth() {
     }
   }
 
+  try { const x = await import('./ui-1a.js'); await x.afterMonth(); } catch (_) {}
+
   drawTrend(days, 'weight', 'spark', 'wRange', 'wNote', 'var(--eaten)', ' กก.',
     (diff, last, n) => move(diff, ' กก.', n + ' วัน') + ' · เหลือถึงเป้า '
       + p.goalWeight + ' กก. อีก ' + (last - p.goalWeight).toFixed(1) + ' กก.');
@@ -804,6 +807,10 @@ function wire() {
 
   $('fSave')?.addEventListener('click', () => writeForm(false));
   $('fSend')?.addEventListener('click', () => writeForm(true));
+  $('bSave')?.addEventListener('click', async () => {
+    await writeForm(false);
+    setStatus($('bStatus'), 'บันทึกตาชั่งแล้ว', 'ok');
+  });
   $('fDate')?.addEventListener('change', () => {
     const v = $('fDate') && $('fDate').value;
     if (v) curDate = v;
@@ -876,6 +883,9 @@ export function onShow(which) {
     const d = $('fDate') && $('fDate').value;
     if (!d || formLoadedDate !== d) renderForm();
     else paintAllPhotos();
+  } else if (which === 'Body') {
+    const d = $('fDate') && $('fDate').value;
+    if (!d || formLoadedDate !== d) renderForm();
   } else if (which === 'Settings') renderSettings();
 }
 
@@ -1750,4 +1760,25 @@ async function renderSettings() {
     const q = await db.listOutbox();
     setText($('sDevQueue'), String((q || []).length));
   } catch (_) { setText($('sDevQueue'), '—'); }
+}
+
+/** ให้ ui-1a.js อ่านวันที่กำลังดูอยู่ */
+export function currentDate() { return curDate; }
+
+/** จดด่วนจากหน้าแรก: ต่อบรรทัดเข้ามื้อที่เลือก แล้วเซฟเงียบ ๆ (ไม่ส่ง AI) */
+export async function quickLog(text, mealIdx) {
+  if (!text) return;
+  const i = Number.isInteger(mealIdx) ? Math.min(Math.max(mealIdx, 0), MEALS.length - 1) : 1;
+  const target = curDate || todayISO();
+  // จดลงวันที่กำลังดูบนหน้าแรก — ถ้าฟอร์มค้างวันอื่นอยู่ เซฟของเดิมก่อนสลับ กันข้อความที่พิมพ์ค้างหาย
+  if ($('fDate') && $('fDate').value && $('fDate').value !== target && formLoadedDate === $('fDate').value) {
+    await writeForm(false, { quiet: true });
+  }
+  if ($('fDate')) $('fDate').value = target;
+  if (formLoadedDate !== ($('fDate') && $('fDate').value)) await renderForm();
+  const ta = $('fM' + i);
+  if (!ta) return;
+  ta.value = (String(ta.value || '').replace(/\s+$/, '') + '\n' + text).replace(/^\n/, '');
+  await writeForm(false, { quiet: true });
+  await renderDay();
 }

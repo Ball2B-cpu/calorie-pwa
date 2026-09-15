@@ -3,11 +3,11 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover">
-<meta name="theme-color" content="#E9EDEE">
-<meta name="theme-color" content="#0E151A" media="(prefers-color-scheme: dark)">
+<meta name="theme-color" content="#F5F4F0">
+<meta name="theme-color" content="#14171A" media="(prefers-color-scheme: dark)">
 <title>จดแคล</title>
 
-<!-- PWA / iOS home-screen app -->
+<!-- PWA / iOS home-screen app — ไอคอนยังเป็นไฟล์เดิม ไม่เปลี่ยนในรอบนี้ -->
 <link rel="manifest" href="./manifest.webmanifest">
 <meta name="mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-capable" content="yes">
@@ -22,21 +22,20 @@
 <link rel="stylesheet" href="./css/app.css">
 
 <!-- ===== error boundary =====
-     ต้องเป็น inline ไม่ใช่โมดูล เพราะหน้าที่ของมันคือรับมือกรณีที่โมดูล/CSS โหลดไม่ได้
-     (import พังตัวเดียว = หน้าขาว และ service worker จะแคชหน้าขาวนั้นค้างไว้ แก้ยากมากบนมือถือ) -->
+     ต้องเป็น inline ไม่ใช่โมดูล เพราะหน้าที่ของมันคือรับมือกรณีที่โมดูล/CSS โหลดไม่ได้ -->
 <style>
   #boot-error{
     display:none;position:fixed;inset:0;z-index:9999;padding:24px 20px;
-    background:#0E151A;color:#E6EDF0;font:15px/1.6 -apple-system,"Segoe UI",sans-serif;
+    background:#14171A;color:#ECEAE4;font:15px/1.6 -apple-system,"Segoe UI",sans-serif;
   }
   #boot-error h1{font-size:17px;margin:0 0 10px}
-  #boot-error pre{white-space:pre-wrap;word-break:break-word;font-size:12px;color:#93A5AE;
-    background:#161F25;border:1px solid #26333B;border-radius:8px;padding:10px;max-height:35vh;overflow:auto}
+  #boot-error pre{white-space:pre-wrap;word-break:break-word;font-size:12px;color:#9BA5AA;
+    background:#1C2023;border:1px solid #2C3135;border-radius:10px;padding:10px;max-height:35vh;overflow:auto}
   #boot-error button{
     -webkit-appearance:none;appearance:none;margin-top:14px;width:100%;padding:14px;
-    background:#54A9A0;color:#06231f;border:0;border-radius:10px;font-size:16px;font-weight:600;
+    background:#6FAFA7;color:#06231f;border:0;border-radius:12px;font-size:16px;font-weight:600;
   }
-  #boot-error small{display:block;margin-top:14px;color:#6D8089}
+  #boot-error small{display:block;margin-top:14px;color:#727C81}
 </style>
 </head>
 <body>
@@ -49,17 +48,16 @@
   <small>ถ้ายังไม่หาย: ปิดแอพแล้วเปิดใหม่อีกครั้ง (ข้อมูลไม่หาย)</small>
 </div>
 
-<!-- ดึงหน้าจอลงจากบนสุดแล้วปล่อย = รีเฟรชแอพ (เช็คโค้ดใหม่ + ดึงข้อมูลใหม่) แทนปิด-เปิดแอพเอง -->
 <div id="pullRefresh" aria-hidden="true">
   <div class="pill"><span id="pullRefreshIcon">↓</span><span id="pullRefreshText">ดึงลงเพื่อรีเฟรช</span></div>
 </div>
 
-<!-- โครงหน้า: 4 มุมมอง — เนื้อในแต่ละมุมมองใส่ในก้อนงาน ui -->
 <main id="app">
   <header id="topbar">
     <div id="syncStatus" class="mono" aria-live="polite"></div>
   </header>
 
+  <!-- ── วันนี้ ─────────────────────────────────────── -->
   <section id="viewDay" class="view" hidden>
     <div class="topline">
       <div class="daynav">
@@ -75,20 +73,40 @@
     </div>
 
     <div class="card meter">
-      <div class="lead">
-        <div class="big" id="bigwrap">
-          <div class="label" id="biglabel">เหลือวันนี้</div>
-          <div class="num" id="bignum">—<span class="unit">kcal</span></div>
+      <div class="ringwrap">
+        <div class="ring" id="ring">
+          <svg width="150" height="150" viewBox="0 0 150 150" aria-hidden="true">
+            <circle class="rtrack" cx="75" cy="75" r="66"></circle>
+            <circle class="rfill" id="ringFill" cx="75" cy="75" r="66"
+                    stroke-dasharray="414.7" stroke-dashoffset="414.7"></circle>
+          </svg>
+          <div class="ringtext">
+            <div class="num" id="bignum">—<span class="unit">kcal</span></div>
+            <div class="label" id="biglabel">เหลือวันนี้</div>
+          </div>
         </div>
-        <div class="eaten-side">
-          <div class="n" id="eaten">—</div>
-          <div class="k">กินไปแล้ว จาก <span id="limit">—</span></div>
+        <div class="ringside">
+          <div class="eaten-side">
+            <div class="n" id="eaten">—</div>
+            <div class="k">กินไปแล้ว จาก <span id="limit">—</span></div>
+          </div>
+          <div class="protein">
+            <div class="prow">
+              <div class="t">โปรตีน</div>
+              <div class="v"><span id="pnow">—</span> / <span id="pgoal">—</span> g</div>
+            </div>
+            <div class="pbar"><div class="pfill" id="pfill"></div></div>
+            <div class="pnote" id="pnote"></div>
+          </div>
+          <button class="bodyline" id="toBody" type="button">
+            <span id="bodySummary">ตาชั่งเช้า · ยังไม่ชั่ง</span><span class="mono">›</span>
+          </button>
         </div>
       </div>
-      <div class="gauge">
-        <div class="track" id="track">
-          <div class="zone-over" id="zoneover"></div>
-        </div>
+
+      <!-- เกจเส้นเดิม: ซ่อนด้วย CSS แต่คงไว้ให้ paintGauge() ของ ui.js ทำงานได้ตามเดิม -->
+      <div class="gauge" aria-hidden="true">
+        <div class="track" id="track"><div class="zone-over" id="zoneover"></div></div>
         <div class="tick" id="tickLimit"></div>
         <div class="tick-label" id="tickLimitLabel"></div>
         <div class="tick soft" id="tickTdee"></div>
@@ -96,13 +114,13 @@
       </div>
     </div>
 
-    <div class="card protein">
-      <div class="prow">
-        <div class="t">โปรตีน (ยิ่งเยอะยิ่งดี)</div>
-        <div class="v"><span id="pnow">—</span><small> / <span id="pgoal">—</span> g</small></div>
+    <!-- จดด่วน: แตะครั้งเดียวได้เลย · แตะค้าง/เลือกปริมาณในชีต -->
+    <div class="quick" id="quick">
+      <div class="quickhead">
+        <div class="t">จดด่วน — ของที่กินบ่อย</div>
+        <button type="button" id="quickMore">ค้นหาอย่างอื่น</button>
       </div>
-      <div class="pbar"><div class="pfill" id="pfill"></div></div>
-      <div class="pnote" id="pnote"></div>
+      <div class="quickrow" id="quickRow"></div>
     </div>
 
     <div class="card meals" id="meals"></div>
@@ -118,28 +136,42 @@
     </div>
   </section>
 
+  <!-- ── ย้อนหลัง: 7 วัน / ทั้งเดือน ─────────────────── -->
   <section id="viewMonth" class="view" hidden>
-    <div class="topline">
+    <div class="rangebar">
       <div class="date" id="monthTitle">—</div>
-      <div class="weight" id="monthMeta">—</div>
+      <div class="seg-toggle" role="group" aria-label="ช่วงเวลา">
+        <button type="button" id="rangeWeek" aria-pressed="false">7 วัน</button>
+        <button type="button" id="rangeMonth" aria-pressed="true">ทั้งเดือน</button>
+      </div>
     </div>
+    <div class="weight mono" id="monthMeta">—</div>
 
     <div class="sums">
-      <div class="sum"><div class="k">เฉลี่ยต่อวัน</div><div class="v" id="sAvg">—</div></div>
-      <div class="sum"><div class="k">อยู่ในงบ 1,800</div><div class="v" id="sUnder">—</div></div>
-      <div class="sum"><div class="k" id="sDeficitK">ขาดดุลสะสม (เทียบ TDEE)</div><div class="v" id="sDeficit">—</div></div>
-      <div class="sum"><div class="k">โปรตีนถึงเป้า</div><div class="v" id="sProtein">—</div></div>
-      <div class="sum span" id="sOpenWrap" hidden><div class="k">ยังไม่ยืนยัน</div><div class="v" id="sOpen">—</div></div>
+      <div class="sum"><div class="v" id="sAvg">—</div><div class="k">เฉลี่ยต่อวัน</div></div>
+      <div class="sum"><div class="v" id="sUnder">—</div><div class="k">วันที่อยู่ในงบ</div></div>
+      <div class="sum"><div class="v" id="sDeficit">—</div><div class="k" id="sDeficitK">ขาดดุลสะสม (เทียบ TDEE)</div></div>
+      <div class="sum"><div class="v" id="sProtein">—</div><div class="k">โปรตีนถึงเป้า</div></div>
+      <div class="sum span" id="sOpenWrap" hidden><div class="v" id="sOpen">—</div><div class="k">ยังไม่ยืนยัน</div></div>
     </div>
 
-    <div class="card cal">
-      <div class="dow"><span>จ</span><span>อ</span><span>พ</span><span>พฤ</span><span>ศ</span><span>ส</span><span>อา</span></div>
-      <div class="grid" id="grid"></div>
-      <div class="callegend">
-        <div><i class="lg-good"></i>อยู่ในงบ</div>
-        <div><i class="lg-warn"></i>เกินงบ แต่ยังต่ำกว่าที่เผา</div>
-        <div><i class="lg-over"></i>เกินที่เผา</div>
-        <div><i class="lg-open"></i>ยังไม่ยืนยัน</div>
+    <!-- 7 วัน (วาดโดย ui-1a.js) -->
+    <div id="weekPane" hidden>
+      <div class="weekbars" id="weekBars"></div>
+      <div class="weeknote" id="weekNote"></div>
+    </div>
+
+    <!-- ทั้งเดือน (วาดโดย ui.js เดิม) -->
+    <div id="monthPane">
+      <div class="card cal">
+        <div class="dow"><span>จ</span><span>อ</span><span>พ</span><span>พฤ</span><span>ศ</span><span>ส</span><span>อา</span></div>
+        <div class="grid" id="grid"></div>
+        <div class="callegend">
+          <div><i class="lg-good"></i>อยู่ในงบ</div>
+          <div><i class="lg-warn"></i>เกินงบ แต่ยังต่ำกว่าที่เผา</div>
+          <div><i class="lg-over"></i>เกินที่เผา</div>
+          <div><i class="lg-open"></i>ยังไม่ยืนยัน</div>
+        </div>
       </div>
     </div>
 
@@ -152,47 +184,21 @@
       <div class="wnote" id="wNote"></div>
 
       <div class="brow">
-        <div class="h"><div class="t">กล้ามเนื้อ</div><div class="v" id="mRange">—</div></div>
-        <svg class="spark small" id="sparkM" viewBox="0 0 300 38" preserveAspectRatio="none" aria-hidden="true"></svg>
-        <div class="wnote" id="mNote"></div>
-      </div>
-
-      <div class="brow">
         <div class="h"><div class="t">% ไขมัน</div><div class="v" id="fRange">—</div></div>
         <svg class="spark small" id="sparkF" viewBox="0 0 300 38" preserveAspectRatio="none" aria-hidden="true"></svg>
         <div class="wnote" id="fatNote"></div>
       </div>
+
+      <div class="brow">
+        <div class="h"><div class="t">กล้ามเนื้อ</div><div class="v" id="mRange">—</div></div>
+        <svg class="spark small" id="sparkM" viewBox="0 0 300 38" preserveAspectRatio="none" aria-hidden="true"></svg>
+        <div class="wnote" id="mNote"></div>
+      </div>
     </div>
   </section>
+
+  <!-- ── จด: อาหารก่อน ตาชั่งแยกลงล่าง ───────────────── -->
   <section id="viewForm" class="view" hidden>
-    <div class="fcard fweight">
-      <div class="frow" style="align-items:flex-end">
-        <div class="fg" style="flex:0 0 auto"><label for="fDate">วันที่</label><input type="date" id="fDate"></div>
-        <div class="fg" style="flex:0 0 auto"><label for="fTime">เวลาชั่ง</label><input type="time" id="fTime" style="width:96px"></div>
-      </div>
-      <div class="fmain">
-        <input type="number" id="fWeight" step="0.1" inputmode="decimal" placeholder="—" style="flex:0 1 170px" aria-label="น้ำหนักเช้า กิโลกรัม">
-        <span class="fdelta" id="fDelta">—</span>
-        <span class="u" id="fRef"></span>
-      </div>
-      <p class="fhint">ชั่งตอนตื่นนอน เข้าห้องน้ำแล้ว ก่อนกินอะไร · <b>บันทึกไว้ก่อน</b> = เก็บไว้ในเครื่อง แก้ต่อได้ทั้งวัน · <b>ส่งคำนวณ</b> = เข้าคิวให้ AI ประเมิน (ไม่ต้องมีเน็ตตอนกด — ส่งเมื่อมีเน็ต)</p>
-    </div>
-
-    <div class="fcard">
-      <h3>ตาชั่ง dretec</h3>
-      <div class="fgrid">
-        <div class="fg"><label for="fBmi">BMI <i id="rBmi"></i></label><input type="number" step="0.1" inputmode="decimal" id="fBmi"></div>
-        <div class="fg"><label for="fFat">% ไขมัน <i id="rFat"></i></label><input type="number" step="0.1" inputmode="decimal" id="fFat"></div>
-        <div class="fg"><label for="fMuscle">กล้ามเนื้อ กก. <i id="rMuscle"></i></label><input type="number" step="0.1" inputmode="decimal" id="fMuscle"></div>
-        <div class="fg"><label for="fVisceral">Visceral Fat</label><input type="number" step="1" inputmode="numeric" id="fVisceral"></div>
-        <div class="fg"><label for="fWater">% น้ำ</label><input type="number" step="0.1" inputmode="decimal" id="fWater"></div>
-        <div class="fg"><label for="fBone">มวลกระดูก กก.</label><input type="number" step="0.1" inputmode="decimal" id="fBone"></div>
-        <div class="fg"><label for="fBmr">BMR kcal</label><input type="number" step="1" inputmode="numeric" id="fBmr"></div>
-        <div class="fg"><label for="fMage">Metabolic Age</label><input type="number" step="1" inputmode="numeric" id="fMage"></div>
-      </div>
-      <p class="fhint">กรอกเท่าที่แอปขึ้น ช่องว่างจะไม่ถูกเขียนเป็น 0</p>
-    </div>
-
     <div class="fcard" id="fMeals">
       <h3>กินอะไรไปบ้าง — บรรทัดละอย่าง</h3>
     </div>
@@ -212,9 +218,66 @@
     </div>
   </section>
 
+  <!-- ── ตาชั่ง: แยกออกจากหน้าจดแล้ว ─────────────────── -->
+  <section id="viewBody" class="view" hidden>
+    <div class="fcard fweight">
+      <div class="frow" style="align-items:flex-end">
+        <div class="fg" style="flex:0 0 auto"><label for="fDate">วันที่</label><input type="date" id="fDate"></div>
+        <div class="fg" style="flex:0 0 auto"><label for="fTime">เวลาชั่ง</label><input type="time" id="fTime" style="width:96px"></div>
+      </div>
+      <div class="fmain">
+        <input type="number" id="fWeight" step="0.1" inputmode="decimal" placeholder="—" aria-label="น้ำหนักเช้า กิโลกรัม">
+      </div>
+      <div class="fmain">
+        <span class="fdelta" id="fDelta">—</span>
+        <span class="u" id="fRef"></span>
+      </div>
+      <p class="fhint">ชั่งตอนตื่นนอน เข้าห้องน้ำแล้ว ก่อนกินอะไร · ทุกช่องแก้ย้อนหลังได้ ช่องว่างไม่ถูกเขียนเป็น 0</p>
+    </div>
+
+    <div class="fcard">
+      <h3>ตาชั่ง dretec</h3>
+      <div class="fgrid">
+        <div class="fg"><label for="fFat">% ไขมัน <i id="rFat"></i></label><input type="number" step="0.1" inputmode="decimal" id="fFat"></div>
+        <div class="fg"><label for="fMuscle">กล้ามเนื้อ กก. <i id="rMuscle"></i></label><input type="number" step="0.1" inputmode="decimal" id="fMuscle"></div>
+        <div class="fg"><label for="fBmi">BMI <i id="rBmi"></i></label><input type="number" step="0.1" inputmode="decimal" id="fBmi"></div>
+        <div class="fg"><label for="fVisceral">Visceral Fat</label><input type="number" step="1" inputmode="numeric" id="fVisceral"></div>
+        <div class="fg"><label for="fWater">% น้ำ</label><input type="number" step="0.1" inputmode="decimal" id="fWater"></div>
+        <div class="fg"><label for="fBone">มวลกระดูก กก.</label><input type="number" step="0.1" inputmode="decimal" id="fBone"></div>
+        <div class="fg"><label for="fBmr">BMR kcal</label><input type="number" step="1" inputmode="numeric" id="fBmr"></div>
+        <div class="fg"><label for="fMage">Metabolic Age</label><input type="number" step="1" inputmode="numeric" id="fMage"></div>
+      </div>
+      <button type="button" class="primary" id="bSave">บันทึกตาชั่ง</button>
+      <span class="fstatus" id="bStatus"></span>
+    </div>
+  </section>
+
   <div id="foodSuggest" hidden></div>
 
+  <!-- ชีตเลือกปริมาณของ "จดด่วน" -->
+  <div id="quickSheet" class="sheet" hidden>
+    <div class="sheet-card" role="dialog" aria-modal="true" aria-labelledby="qsName">
+      <div class="sheet-h">
+        <div><div class="n" id="qsName">—</div><span class="u" id="qsUnit"></span></div>
+        <button type="button" id="qsClose" aria-label="ปิด">×</button>
+      </div>
+      <div class="sheet-big"><div class="n" id="qsKcal">—</div><div class="k" id="qsMeta">kcal</div></div>
+      <div class="sheet-k">กินไปเท่าไหร่</div>
+      <div class="pick" id="qsPortions"></div>
+      <div class="sheet-k">มื้อไหน</div>
+      <div class="pick words" id="qsMeals"></div>
+      <button type="button" class="go" id="qsGo">บันทึกไว้ในเครื่อง</button>
+      <p class="fine">ไม่ต้องมีเน็ต · แก้ได้ทั้งวัน · ส่งให้ AI ประเมินตอนปิดยอด</p>
+    </div>
+  </div>
+
+  <!-- ── ตั้งค่า ─────────────────────────────────────── -->
   <section id="viewSettings" class="view" hidden>
+    <div class="sgroup">
+      <button type="button" class="srow" id="sGoalRow">เป้าหมายและงบแคล<span class="v" id="sGoalVal">—</span></button>
+      <button type="button" class="srow" id="sProteinRow">โปรตีนเป้า<span class="v" id="sProteinVal">—</span></button>
+    </div>
+
     <div class="fcard">
       <h3>คีย์และโมเดล</h3>
       <p class="fhint">เก็บในเครื่องนี้เท่านั้น (localStorage) ไม่ขึ้น IndexedDB และไม่ถูกส่งออกพร้อมข้อมูลอาหาร</p>
@@ -242,9 +305,13 @@
       </div>
     </div>
 
+    <div class="snote" id="sBackupNote" hidden>
+      <b id="sBackupNoteT">ยังไม่ได้สำรองข้อมูล</b>
+      <span>Safari อาจล้างข้อมูลของเว็บที่ไม่ได้เปิดใน 7 วัน — กดสำรองก่อนไม่ใช้แอพนาน</span>
+    </div>
+
     <div class="fcard">
       <h3>สำรองข้อมูล</h3>
-      <p class="fhint">Safari อาจล้างข้อมูลของเว็บที่ไม่ได้เปิดใน 7 วัน — ส่งออกไว้เป็นระยะ โดยเฉพาะก่อนไม่ใช้แอพนาน</p>
       <div class="fbtns">
         <button type="button" class="ghost" id="sExport">ส่งออกข้อมูล (JSON)</button>
         <button type="button" class="primary" id="sImport">นำเข้า…</button>
@@ -268,9 +335,12 @@
 
   <nav id="tabs">
     <button type="button" id="tabDay">วันนี้</button>
-    <button type="button" id="tabMonth">ทั้งเดือน</button>
-    <button type="button" id="tabForm">จด</button>
-    <button type="button" id="tabSettings" aria-label="ตั้งค่า">⚙</button>
+    <button type="button" id="tabMonth">ย้อนหลัง</button>
+    <button type="button" id="tabForm" class="fab" aria-label="จดอาหาร">
+      <svg width="34" height="34" viewBox="0 0 26 26" aria-hidden="true"><path d="M13 2.5 V23.5 M2.5 13 H23.5" stroke="currentColor" stroke-width="5" stroke-linecap="round"></path></svg>
+    </button>
+    <button type="button" id="tabBody">ตาชั่ง</button>
+    <button type="button" id="tabSettings">ตั้งค่า</button>
   </nav>
 </main>
 
@@ -285,7 +355,6 @@
     if (box) box.style.display = 'block';
   }
   window.addEventListener('error', function (e) {
-    // ดักเฉพาะ error ตอนบูต: ถ้าแอพขึ้นแล้ว (มี data-booted) ไม่ต้องบังหน้าจอ
     if (!document.documentElement.hasAttribute('data-booted'))
       show((e.message || 'error') + '\n' + (e.filename || '') + ':' + (e.lineno || ''));
   });
@@ -293,7 +362,6 @@
     if (!document.documentElement.hasAttribute('data-booted'))
       show('unhandled: ' + ((e.reason && (e.reason.stack || e.reason.message)) || e.reason));
   });
-  // ถ้า 8 วินาทีแล้วแอพยังไม่ประกาศว่าบูตเสร็จ ถือว่าพัง
   setTimeout(function () {
     if (!document.documentElement.hasAttribute('data-booted')) show('แอพไม่ตอบสนองภายใน 8 วินาที (โมดูลอาจโหลดไม่ได้)');
   }, 8000);
