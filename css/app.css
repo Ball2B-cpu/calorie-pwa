@@ -172,6 +172,9 @@ button{font:inherit;color:inherit}
   letter-spacing:-.04em;font-variant-numeric:tabular-nums;color:var(--eaten);
 }
 .ring.is-over .ringtext .num{color:var(--over)}
+/* ค่าประมาณมี "~" นำหน้า → กว้างเกินวง: ย่อเลขลงนิด + ย่อ "~" (ยังเห็นชัดว่าเป็นค่าประมาณ) */
+.ringtext .num:has(.est){font-size:33px}
+.ringtext .num .est::before{font-size:.7em;margin-right:1px}
 .ringtext .num .unit{display:none}
 .ringtext .label{font-size:11.5px;color:var(--muted)}
 .ringside{flex:1;min-width:0;display:flex;flex-direction:column;gap:16px}
