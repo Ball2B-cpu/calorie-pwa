@@ -469,6 +469,16 @@ test('applyFoodTable: คูณจากตารางเอง + เลขท�
   assert(v.ok && v.value.kcal === 424 && v.value.items[0].grams === 150, 'ผ่าน validator แล้วเลขต้องคงเดิม');
 });
 
+test('applyFoodTable: เมนูโรงอาหาร = เลขป้าย × สัดส่วน, p ใช้ของโมเดล (เคส 親子丼 15 ก.ย.)', () => {
+  const foods = [{ id: 'menu_0915_1', name: 'B定食①丼 親子丼', kcal: 828, p: null, g: 1, src: 'label' }];
+  const full = net.applyFoodTable(estMeal({ items: [estItem({ foodId: 'menu_0915_1', grams: 1, kcal: 580, p: 30 })], kcal: 580, p: 30 }), foods);
+  assert(full.items[0].kcal === 828 && full.items[0].p === 30 && full.items[0].basis === 'label', `ได้ ${full.items[0].kcal}/${full.items[0].p}`);
+  const less = net.applyFoodTable(estMeal({ items: [estItem({ foodId: 'menu_0915_1', grams: 0.88, kcal: 580, p: 28 })], kcal: 580, p: 28 }), foods);
+  assert(less.items[0].kcal === 729, `ข้าวน้อยต้อง 729 ได้ ${less.items[0].kcal}`);
+  const v = net.validateEstimate(less);
+  assert(v.ok && v.value.kcal === 729 && v.value.items[0].grams === 0.88, 'ผ่าน validator แล้วเลขต้องคงเดิม');
+});
+
 test('pull ซ้ำ: เนื้อหาเท่าเดิมไม่นับว่าเปลี่ยน แต่ final ใหม่ต้องนับ', () => {
   const remote = baseDay({ rev: 8, meals: [{ id: 'm1', raw: ['ข้าว'], est: { kcal: 433 }, final: { kcal: 531 } }] });
   const local = baseDay({ rev: 7, meals: [{ id: 'm1', raw: ['ข้าว'], est: { kcal: 433 } }] });

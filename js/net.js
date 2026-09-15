@@ -277,7 +277,8 @@ export function applyFoodTable(raw, foods) {
     const perG = f && Number(f.g) > 0 ? 1 / Number(f.g) : 0;
     if (f && perG && grams > 0) {
       it.kcal = Math.round(Number(f.kcal) * grams * perG);
-      it.p = Math.round(Number(f.p) * grams * perG * 10) / 10;
+      // เมนูโรงอาหารไม่มีเลขโปรตีนบนป้าย (p: null) → ใช้ p ที่โมเดลประมาณ
+      if (f.p != null) it.p = Math.round(Number(f.p) * grams * perG * 10) / 10;
       it.basis = f.src === 'label' ? 'label' : 'std';
       changed = true;
     }
@@ -476,6 +477,32 @@ function parseErrMsg(text) {
   }
 }
 
+/* คลังเมนูโรงอาหาร (มื้อกลางวัน) — อยู่ใน repo private: menus/YYYY-MM.json (ไม่ขึ้น repo public เพราะบอกที่ทำงาน)
+   {"days":{"2026-09-16":[["A定食","焼肉丼",774],...]}} · kcal = ทั้งเซ็ตตามป้าย
+   16 ก.ย.: AI เดาดงจากรูปต่ำกว่าป้ายจริง 220-250 kcal ทุกวัน → ให้โมเดลแค่ "เลือกช่อง + สัดส่วนที่กิน" แล้วโค้ดคูณเลขป้าย
+   ส่งเฉพาะเมนูของวันนั้น (~6 แถว ~150 tok) ไม่ส่งทั้งเดือน */
+const menuCache = new Map();
+async function loadMenuFor(date) {
+  const pat = ghPat(), repo = ghRepo();
+  if (!pat || !repo || !/^\d{4}-\d{2}-\d{2}$/.test(String(date || ''))) return [];
+  const ym = date.slice(0, 7);
+  if (!menuCache.has(ym)) {
+    try {
+      const f = await ghGet(repo, pat, `menus/${ym}.json`);
+      menuCache.set(ym, f && f.content ? JSON.parse(base64ToUtf8(f.content)) : null);
+    } catch (e) {
+      console.warn('[menu] โหลดเมนูไม่ได้ ประเมินแบบเดิมต่อ', e);
+      return [];   // ไม่ cache ความล้มเหลว — ครั้งหน้าลองใหม่
+    }
+  }
+  const rows = menuCache.get(ym)?.days?.[date];
+  if (!Array.isArray(rows)) return [];
+  const tag = date.slice(5).replace('-', '');
+  return rows.filter((r) => Array.isArray(r) && Number(r[2]) > 0).map((r, i) => ({
+    id: `menu_${tag}_${i}`, name: `${r[0]} ${r[1]}`, unit: '1 เซ็ต', g: 1, kcal: Number(r[2]), p: null, src: 'label',
+  }));
+}
+
 async function loadFoodsCatalog() {
   if (foodsCache) return foodsCache;
   const res = await fetch('./data/foods.json');
@@ -599,11 +626,19 @@ async function writeEstimate(date, mealId, estimate, model, sig) {
 }
 
 /** ประเมินมื้อด้วยโมเดล vision */
-export async function estimateMeal({ date, mealId, raw, photoBlobs, foods, sig }) {
+export async function estimateMeal({ date, mealId, mealKey, raw, photoBlobs, foods, sig }) {
   if (!orKey()) return null;
-  const foodSrc = foods || await loadFoodsCatalog();
-  const { system: system0, userText } = fitPrompt(raw, foodSrc);
-  const userParts = [{ type: 'text', text: `วันที่ ${date || ''} มื้อ ${mealId || ''}\n` + userText }];
+  let foodSrc = foods || await loadFoodsCatalog();
+  let { system: system0, userText } = fitPrompt(raw, foodSrc);
+  const menu = mealKey === 'กลางวัน' ? await loadMenuFor(date) : [];
+  if (menu.length) {
+    foodSrc = [...foodSrc, ...menu];
+    system0 += `\n\nเมนูโรงอาหารวันนี้ (kcal = ทั้งเซ็ตตามป้าย รวมข้าว+ซุป+ของเคียงแล้ว):\n`
+      + JSON.stringify(menu.map((m) => ({ id: m.id, name: m.name, kcal: m.kcal })))
+      + `\nถ้ารูป/ข้อความตรงกับเมนูข้างบน: ตอบรายการเดียวแทนทั้งเซ็ต · foodId = id นั้น · grams = สัดส่วนของเซ็ตที่กินจริง (หมด = 1 · ご飯少なめ/ข้าวน้อย ≈ 0.88 · เหลือของให้กะจากรูป) · p = โปรตีนที่ประมาณของส่วนที่กิน · basis "label"`
+      + `\nห้ามแยกข้าว/ซุป/ผักเคียงในเซ็ตเป็นรายการเพิ่ม (รวมในเลขป้ายแล้ว) · ของที่ซื้อเพิ่มนอกเซ็ตค่อยใส่แยก · ไม่ตรงเมนูไหนเลย = ประเมินแบบปกติ`;
+  }
+  const userParts = [{ type: 'text', text: `วันที่ ${date || ''} มื้อ ${mealKey || mealId || ''}\n` + userText }];
   const blobs = Array.isArray(photoBlobs) ? photoBlobs : [];
   for (const blob of blobs) {
     if (!blob) continue;
@@ -963,7 +998,7 @@ async function runAiJob(job) {
         const ph = await db.getPhoto(pid);
         if (ph && ph.blob) blobs.push(ph.blob);
       }
-      await estimateMeal({ date, mealId: meal.id, raw: meal.raw || [], photoBlobs: blobs, foods, sig });
+      await estimateMeal({ date, mealId: meal.id, mealKey: meal.key, raw: meal.raw || [], photoBlobs: blobs, foods, sig });
     } catch (e) {
       if (e && (e.stopRound || e.stopKind || e.code === 'auth')) throw e;
       errors.push(`${meal.key || meal.id}: ${errText(e)}`);
