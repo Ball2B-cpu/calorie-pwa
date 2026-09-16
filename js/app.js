@@ -49,7 +49,7 @@ function wirePullRefresh() {
   const appEl = $('app'), ind = $('pullRefresh'), icon = $('pullRefreshIcon'), text = $('pullRefreshText');
   if (!appEl || !ind || !icon || !text) return;
   const MAX = 88, TRIGGER = 62;
-  let startY = 0, curPull = 0, dragging = false, refreshing = false;
+  let startY = 0, curPull = 0, dragging = false, refreshing = false, hapticFired = false;
 
   const setPull = (px) => {
     curPull = px;
@@ -58,6 +58,9 @@ function wirePullRefresh() {
     ind.style.transform = `translateY(${Math.min(px, MAX) - 40}px)`;
     if (!refreshing) text.textContent = px >= TRIGGER ? 'ปล่อยเพื่อรีเฟรช' : 'ดึงลงเพื่อรีเฟรช';
     icon.textContent = px >= TRIGGER ? '↑' : '↓';
+    // สั่นเบาๆ ตอนดึงถึงจุดปล่อยได้พอดี (ครั้งเดียวต่อการดึง) เผื่อไม่ได้มองจอ จะได้รู้ว่าปล่อยแล้วรีเฟรชแน่
+    if (px >= TRIGGER && !hapticFired) { hapticFired = true; try { navigator.vibrate?.(15); } catch (_) {} }
+    else if (px < TRIGGER) hapticFired = false;
   };
   const snapBack = () => {
     appEl.style.transition = 'transform .25s cubic-bezier(.2,.8,.2,1)';
@@ -71,6 +74,7 @@ function wirePullRefresh() {
     if (e.target?.closest?.('#estDetail, #foodSuggest, input, textarea, select')) { dragging = false; return; }
     startY = e.touches[0].clientY;
     dragging = true;
+    hapticFired = false;
   }, { passive: true });
 
   document.addEventListener('touchmove', (e) => {
