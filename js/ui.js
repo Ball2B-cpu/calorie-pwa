@@ -1569,6 +1569,18 @@ async function writeFormNow(sending, opts) {
     }
     const merged = db.mergeDay(existing, local, 'app');
     const saved = await db.putDay(merged);
+    // 21 ก.ย.: ชั่งน้ำหนักเช้าแล้วไม่ได้กดส่ง เลขค้างในเครื่องทั้งวัน (ฝั่ง repo ไม่เห็น ดูแนวโน้มไม่ได้)
+    //   → body เปลี่ยนเมื่อไหร่ ดันขึ้น GitHub เลย ไม่ต้องรอกด "คำนวณแคล"
+    if (!sending) {
+      const b0 = (existing && existing.body) || {};
+      const b1 = saved.body || {};
+      const bodyChanged = ['weighedAt', ...Object.values(KEY)]
+        .some((k) => (b0[k] == null ? null : b0[k]) !== (b1[k] == null ? null : b1[k]));
+      if (bodyChanged && b1.weight != null) {
+        await db.enqueue({ kind: 'gh-day', date });
+        net.flush('body').catch(() => {});
+      }
+    }
     if (sending) {
       await db.enqueue({ kind: 'ai', date });
       const seen = new Set();
