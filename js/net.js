@@ -273,6 +273,25 @@ export function applyFoodTable(raw, foods) {
   let changed = false;
   const items = raw.items.map((it0) => {
     const it = { ...(it0 || {}) };
+    // โมเดลลืมใส่ foodId ทั้งที่ของอยู่ในคลัง (17–18 ก.ย.: ข้าวโอ๊ต เดา 114 ทั้งที่ฉลาก Quaker = 121)
+    // → จับชื่อรายการกับคลังเอง แต่ต้องตรงตัวเดียวเท่านั้น (ข้าวสวยมี 2 id ปล่อยให้โมเดลเลือกเหมือนเดิม)
+    if (!it.foodId) {
+      const nm = String(it.name || '').toLowerCase();
+      // ให้คะแนนตามความยาวชื่อที่ตรง (ข้าวโอ๊ต ชนะ ข้าว) แล้วต้องเหลือตัวเดียวจริง ๆ
+      const scored = (nm.trim() ? list : []).map((f2) => {
+        if (!f2 || !f2.id || !(Number(f2.g) > 0)) return 0;
+        let best = 0;
+        for (const n of [f2.name, ...(Array.isArray(f2.alias) ? f2.alias : [])]) {
+          const s = String(n || '').toLowerCase();
+          if (s.length >= 2 && nm.includes(s) && s.length > best) best = s.length;
+        }
+        return best;
+      });
+      const top = Math.max(0, ...scored);
+      if (top > 0 && scored.filter((s) => s === top).length === 1) {
+        it.foodId = String(list[scored.indexOf(top)].id);
+      }
+    }
     const f = it.foodId ? byId.get(String(it.foodId)) : null;
     const grams = Number(it.grams);
     const perG = f && Number(f.g) > 0 ? 1 / Number(f.g) : 0;
