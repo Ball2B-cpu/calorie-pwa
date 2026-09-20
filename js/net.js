@@ -645,6 +645,31 @@ async function writeEstimate(date, mealId, estimate, model, sig) {
   return merged;
 }
 
+/** ข้อความที่อ้างถึงของมื้อก่อนในวันเดียวกัน (20 ก.ย.: "อีกครึ่งที่เหลือ" โมเดลเดาใหม่ 180 แทนครึ่งแรก 186) */
+const BACKREF_RE = /ที่เหลือ|อีกครึ่ง|ครึ่งหลัง|ครึ่งที่|อีกถุง|อีกชิ้น|อีกกล่อง|เหมือนเดิม|เหมือนเมื่อ|เหมือนมื้อ|เมื่อเช้า|เมื่อกลางวัน|มื้อเช้า|มื้อกลางวัน/;
+
+export function hasBackref(raw) {
+  return BACKREF_RE.test(Array.isArray(raw) ? raw.join('\n') : String(raw || ''));
+}
+
+/** รายการของมื้อก่อนหน้าในวันเดียวกัน (อ่านสด ๆ เพราะมื้อก่อนอาจเพิ่งถูกประเมินในรอบนี้) */
+async function prevItemsOf(date, mealId) {
+  const day = await db.getDay(date);
+  const out = [];
+  for (const m of (day && day.meals) || []) {
+    if (!m || m.deleted) continue;
+    if (m.id === mealId) break;
+    for (const it of m.items || []) {
+      if (!it || !(Number(it.kcal) > 0)) continue;
+      const row = { มื้อ: m.key || '', name: it.name, kcal: it.kcal, p: it.p };
+      if (it.foodId) row.foodId = it.foodId;
+      if (Number(it.grams) > 0) row.grams = it.grams;
+      out.push(row);
+    }
+  }
+  return out;
+}
+
 /** ประเมินมื้อด้วยโมเดล vision */
 export async function estimateMeal({ date, mealId, mealKey, raw, photoBlobs, foods, sig }) {
   if (!orKey()) return null;
@@ -657,6 +682,16 @@ export async function estimateMeal({ date, mealId, mealKey, raw, photoBlobs, foo
       + JSON.stringify(menu.map((m) => ({ id: m.id, name: m.name, kcal: m.kcal })))
       + `\nถ้ารูป/ข้อความตรงกับเมนูข้างบน: ตอบรายการเดียวแทนทั้งเซ็ต · foodId = id นั้น · grams = สัดส่วนของเซ็ตที่กินจริง (หมด = 1 · ご飯少なめ/ข้าวน้อย ≈ 0.88 · เหลือของให้กะจากรูป) · p = โปรตีนที่ประมาณของส่วนที่กิน · basis "label"`
       + `\nห้ามแยกข้าว/ซุป/ผักเคียงในเซ็ตเป็นรายการเพิ่ม (รวมในเลขป้ายแล้ว) · ของที่ซื้อเพิ่มนอกเซ็ตค่อยใส่แยก · ไม่ตรงเมนูไหนเลย = ประเมินแบบปกติ`;
+  }
+  // ข้อความอ้างถึงมื้อก่อน → ส่งรายการมื้อก่อนของวันเดียวกันไปด้วย (ส่งเฉพาะตอนที่อ้างจริง ไม่งั้นเปลือง token)
+  if (hasBackref(raw)) {
+    const prev = await prevItemsOf(date, mealId);
+    if (prev.length) {
+      system0 += `\n\nรายการที่กินไปแล้ววันนี้ (มื้อก่อนหน้า):\n${JSON.stringify(prev)}`
+        + `\nข้อความมื้อนี้อ้างถึงของมื้อก่อน ("ที่เหลือ" "อีกครึ่ง" "เหมือนเดิม") → เป็นของชิ้น/ถุงเดียวกัน`
+        + ` ต้องใช้ foodId เดิม และคิดจากเลขเดิมของมื้อก่อน (อีกครึ่ง = grams เท่ากับครึ่งแรก · เหมือนเดิม = เท่ากันทุกอย่าง)`
+        + ` ⛔ ห้ามประเมินใหม่จากความรู้อาหารทั่วไปให้ต่างจากมื้อก่อน`;
+    }
   }
   const userParts = [{ type: 'text', text: `วันที่ ${date || ''} มื้อ ${mealKey || mealId || ''}\n` + userText }];
   const blobs = Array.isArray(photoBlobs) ? photoBlobs : [];
