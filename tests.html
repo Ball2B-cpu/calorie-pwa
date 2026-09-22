@@ -92,6 +92,15 @@ test('app เขียน body.weight ได้', () => {
   assert(m.body.fat === 26.2, 'fat ของ remote ต้องไม่หาย');
 });
 
+test('app เขียน body.waist ได้ (รอบเอววัดสัปดาห์ละครั้ง แยกจาก weight)', () => {
+  const remote = baseDay({ body: { weight: 90 } });
+  const local = baseDay({ body: { waist: 104.5 } });
+  deepFreeze(remote); deepFreeze(local);
+  const m = db.mergeDay(remote, local, 'app');
+  assert(m.body.waist === 104.5, 'waist ต้องเป็นค่าจาก local แม้ไม่ได้กรอก weight วันนั้น');
+  assert(m.body.weight === 90, 'weight ของ remote ต้องไม่หาย');
+});
+
 test('app เขียน meals[].final ไม่ได้ (ค่า remote คงอยู่)', () => {
   const remote = baseDay({
     meals: [{ id: 'm_a', key: 'เช้า', raw: ['ไข่'], items: [{ name: 'ไข่', final: { kcal: 150, p: 12 } }], final: { kcal: 150, p: 12 } }],

@@ -795,6 +795,8 @@ async function paintMonth() {
   drawTrend(days, 'fat', 'sparkF', 'fRange', 'fatNote', 'var(--warn)', '%',
     (diff, last, n) => move(diff, ' จุด', n + ' วันที่วัด')
       + ' · เครื่อง BIA อ่านต่ำกว่าจริง ดูทิศทางอย่างเดียว');
+
+  paintWaist().catch(() => {});
   } catch (_) {
     if (gen !== monthGen) return;
     console.warn('[ui] renderMonth failed');
@@ -935,8 +937,8 @@ const MEALS = [
   { key: 'ของว่าง', time: '15:30', chips: ['ขนมปัง Pasco 1 แผ่น', 'เนยถั่ว Kanpy 1 ชช.', 'กาแฟดำไม่หวาน'] },
   { key: 'เย็น', time: '19:00', chips: ['ลาบสันในหมู 200 g', 'บร็อคโคลีต้ม 170 g', 'อกไก่ 150 g', 'ข้าวสวย 1 ทัพพี', 'ไข่ต้ม 1 ฟอง'] },
 ];
-const NUMS = ['fWeight', 'fBmi', 'fFat', 'fMuscle', 'fVisceral', 'fWater', 'fBone', 'fBmr', 'fMage'];
-const KEY = { fWeight: 'weight', fBmi: 'bmi', fFat: 'fat', fMuscle: 'muscle', fVisceral: 'visceral', fWater: 'water', fBone: 'bone', fBmr: 'bmr', fMage: 'mage' };
+const NUMS = ['fWeight', 'fBmi', 'fFat', 'fMuscle', 'fVisceral', 'fWater', 'fBone', 'fBmr', 'fMage', 'fWaist'];
+const KEY = { fWeight: 'weight', fBmi: 'bmi', fFat: 'fat', fMuscle: 'muscle', fVisceral: 'visceral', fWater: 'water', fBone: 'bone', fBmr: 'bmr', fMage: 'mage', fWaist: 'waist' };
 const PHOTO_MAX_SIDE = 1024;
 const PHOTO_MAX_BYTES = 250 * 1024;
 const LS_OR = 'cal.or_key';
@@ -1243,6 +1245,48 @@ async function lastBodyRef(beforeDate) {
   const [y, m] = ym.split('-').map(Number);
   const prev = m === 1 ? (y - 1) + '-12' : y + '-' + pad2(m - 1);
   return tryMonth(prev);
+}
+
+/** รอบเอว วัดสัปดาห์ละครั้ง ไม่ใช่ทุกวัน — ไล่ย้อนข้ามเดือนหาสองค่าล่าสุด (ไม่ใช้ paintMonth's days เพราะอาจไม่พอ) */
+async function lastWaistPair() {
+  const found = [];
+  let ym = todayISO().slice(0, 7);
+  for (let i = 0; i < 8 && found.length < 2; i++) {
+    if (!/^\d{4}-\d{2}$/.test(ym)) break;
+    let days = [];
+    try { days = await db.listDays(ym); } catch (_) { days = []; }
+    for (let k = days.length - 1; k >= 0 && found.length < 2; k--) {
+      const d = days[k];
+      if (d && bodyNum(d, 'waist') != null) found.push(d);
+    }
+    const [y, m] = ym.split('-').map(Number);
+    ym = m === 1 ? (y - 1) + '-12' : y + '-' + pad2(m - 1);
+  }
+  return found;
+}
+
+async function paintWaist() {
+  const range = $('waistRange');
+  const note = $('waistNote');
+  if (!range || !note) return;
+  const gen = monthGen;
+  const [latest, prev] = await lastWaistPair();
+  if (gen !== monthGen) return;
+  if (!latest) {
+    setText(range, '—');
+    setText(note, 'ยังไม่มีข้อมูล');
+    return;
+  }
+  const wLatest = bodyNum(latest, 'waist');
+  const { d, m } = parseISO(latest.date);
+  setText(range, wLatest.toFixed(1) + ' ซม.');
+  let msg = '(' + d + ' ' + TH_MON[m] + ')';
+  if (prev) {
+    const wPrev = bodyNum(prev, 'waist');
+    const diff = wLatest - wPrev;
+    msg += ' · ' + (Math.abs(diff) < 0.05 ? 'คงที่' : (diff < 0 ? '−' : '+') + Math.abs(diff).toFixed(1)) + ' จากครั้งก่อน';
+  }
+  setText(note, msg);
 }
 
 function clearBodyInputs() {
@@ -1576,7 +1620,8 @@ async function writeFormNow(sending, opts) {
       const b1 = saved.body || {};
       const bodyChanged = ['weighedAt', ...Object.values(KEY)]
         .some((k) => (b0[k] == null ? null : b0[k]) !== (b1[k] == null ? null : b1[k]));
-      if (bodyChanged && b1.weight != null) {
+      // รอบเอว (fWaist) วัดสัปดาห์ละครั้ง อาจกรอกวันที่ไม่ได้ชั่งน้ำหนัก — ต้อง sync ได้เหมือนกัน
+      if (bodyChanged && (b1.weight != null || b1.waist != null)) {
         await db.enqueue({ kind: 'gh-day', date });
         net.flush('body').catch(() => {});
       }
