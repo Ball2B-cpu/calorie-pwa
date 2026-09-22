@@ -24,6 +24,7 @@
 <script type="module">
 import * as db from './js/db.js';
 import * as net from './js/net.js';
+import * as ui1a from './js/ui-1a.js';
 
 const results = document.getElementById('results');
 const summary = document.getElementById('summary');
@@ -208,6 +209,63 @@ test('มื้อที่มีแค่ remote ห้ามหาย แล�
   assert(ids.includes('m_new'), 'มื้อใหม่ของ app ต้องถูกเพิ่ม');
   const ai = db.mergeDay(remote, local, 'ai');
   assert(ai.meals.length === 1 && ai.meals[0].id === 'm_keep', 'ai ห้ามเพิ่มมื้อ');
+});
+
+test('ai คำนวณใหม่แล้ว items สั้นลง — ของเก่าที่เกินมาต้องถูกตัดทิ้ง ไม่ค้าง (บั๊ก 22 ก.ย.: จดด่วนเผลอเข้ามื้อผิด ลบออกจาก raw แล้ว est ไม่รวมแต่ items ยังค้าง)', () => {
+  // จำลองสถานการณ์จริงจาก days/2026-09-22.json มื้อกลางวัน:
+  //  รอบก่อน AI คิดด้วย raw ที่มีข้อความเวย์ปนอยู่ → items มี 2 รายการ (B定食②, เวย์)
+  const remote = baseDay({
+    meals: [{
+      id: 'm_lunch', key: 'กลางวัน', raw: [], photos: ['p_1', 'p_2'],
+      items: [
+        { name: 'B定食②', est: { kcal: 764, p: 28 } },
+        { name: 'เวย์โปรตีน REYS', est: { kcal: 118, p: 21.8 } },
+      ],
+      est: { kcal: 882, p: 49.8, sig: JSON.stringify([['เวย์...'], ['p_1', 'p_2']]) },
+    }],
+  });
+  // บอลลบข้อความเวย์ออกจาก raw แล้ว (raw กลับไปเป็น [] เหมือนเดิม) แล้วกดคำนวณใหม่
+  //  AI คำนวณใหม่จากรูป 2 รูปเท่านั้น → items เหลือรายการเดียว
+  const local = baseDay({
+    meals: [{
+      id: 'm_lunch',
+      items: [{ name: 'B定食②', est: { kcal: 764, p: 28 } }],
+      est: { kcal: 764, p: 28, sig: JSON.stringify([[], ['p_1', 'p_2']]) },
+    }],
+  });
+  const m = db.mergeDay(remote, local, 'ai');
+  const meal = m.meals[0];
+  assert(meal.items.length === 1, `items ต้องเหลือรายการเดียว ได้ ${meal.items.length}`);
+  assert(meal.items[0].name === 'B定食②', 'ต้องเหลือแค่ B定食②');
+  const sum = meal.items.reduce((s, it) => s + (it.est && it.est.kcal || 0), 0);
+  assert(sum === meal.est.kcal, `est.kcal (${meal.est.kcal}) ต้องเท่ากับผลรวม items (${sum})`);
+});
+
+test('claude (final review) items สั้นลง — ก็ต้องตัดของเก่าทิ้งเหมือนกัน ไม่ใช่แค่ ai', () => {
+  const remote = baseDay({
+    meals: [{
+      id: 'm_a', key: 'เช้า', raw: ['a'],
+      items: [{ name: 'ของเก่า1', final: { kcal: 100, p: 1 } }, { name: 'ของเก่า2', final: { kcal: 50, p: 1 } }],
+      final: { kcal: 150, p: 2 },
+    }],
+  });
+  const local = baseDay({
+    meals: [{ id: 'm_a', items: [{ name: 'ของเก่า1', final: { kcal: 100, p: 1 } }], final: { kcal: 100, p: 1 } }],
+  });
+  const m = db.mergeDay(remote, local, 'claude');
+  assert(m.meals[0].items.length === 1, `items ต้องเหลือ 1 ได้ ${m.meals[0].items.length}`);
+});
+
+test('app เขียนมื้อโดยไม่ส่ง items มาเลย (undefined) — items ของ remote ต้องไม่หาย (ไม่ใช่ full replace)', () => {
+  const remote = baseDay({
+    meals: [{ id: 'm_a', key: 'เช้า', raw: ['a'], items: [{ name: 'ไข่', est: { kcal: 150, p: 12 } }], est: { kcal: 150, p: 12 } }],
+  });
+  const local = baseDay({
+    meals: [{ id: 'm_a', raw: ['a แก้ข้อความ'] }], // app แก้แค่ raw ไม่แตะ items เลย
+  });
+  const m = db.mergeDay(remote, local, 'app');
+  assert(m.meals[0].items.length === 1 && m.meals[0].items[0].name === 'ไข่', 'items ของ remote ต้องคงอยู่ครบเมื่อ app ไม่ได้ส่ง items มา');
+  assert(deepEqual(m.meals[0].raw, ['a แก้ข้อความ']), 'raw ต้องเป็นของ app');
 });
 
 test('mergeDay ไม่แก้ remote/local ที่รับเข้ามา (pure)', () => {
@@ -648,6 +706,19 @@ test('pushDay ถูกปฏิเสธเมื่อรูปของวั
   } finally {
     hold.restore();
   }
+});
+
+test('จดด่วน: เวลา → ดัชนีมื้อ ใช้จุดกึ่งกลางระหว่างมื้อ ไม่ใช่ตัดชั่วโมงเต็ม (บั๊ก 22 ก.ย.: บ่ายก่อน 15:00 ดันเข้ากลางวันแทนของว่าง)', () => {
+  const at = (h, m) => ui1a.mealIndexForMinutes(h * 60 + m);
+  assert(at(6, 0) === 0, 'ตี 6 ต้องเข้าเช้า');
+  assert(at(9, 39) === 0, '09:39 ยังเป็นเช้า');
+  assert(at(9, 40) === 1, '09:40 (จุดกึ่งกลางเช้า/กลางวัน) ต้องข้ามเป็นกลางวัน');
+  assert(at(12, 20) === 1, '12:20 ต้องเป็นกลางวัน');
+  assert(at(14, 30) === 2, '14:30 ต้องเป็นของว่างแล้ว (เดิม h<15 ทำให้หลุดไปกลางวันผิด — นี่คือบั๊กจริงที่บอลเจอ)');
+  assert(at(15, 30) === 2, '15:30 ต้องเป็นของว่าง');
+  assert(at(17, 14) === 2, '17:14 ยังเป็นของว่าง');
+  assert(at(17, 15) === 3, '17:15 (จุดกึ่งกลางของว่าง/เย็น) ต้องข้ามเป็นเย็น');
+  assert(at(21, 0) === 3, 'สามทุ่มต้องเป็นเย็น');
 });
 
 let passed = 0;

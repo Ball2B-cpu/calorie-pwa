@@ -53,12 +53,22 @@ function bumpQuick(id) {
   const next = [id, ...quickIds().filter((x) => x !== id)].slice(0, 10);
   try { localStorage.setItem(LS_QUICK, JSON.stringify(next)); } catch (_) {}
 }
+// เวลาโดยปกติของแต่ละมื้อ (ตรงกับ MEALS[].time ใน ui.js) — ใช้คำนวณ "จุดกึ่งกลาง" ระหว่างมื้อ
+//   เดิมตัดเป็นชั่วโมงเต็ม (10/15/17) ทำให้ช่วง 13:55–14:59 (กึ่งกลางจริงของกลางวัน↔ของว่าง) ถูกนับเป็นกลางวันผิด
+//   บั๊ก 22 ก.ย.: จดด่วนตอนบ่ายก่อน 15:00 นิดเดียว ดันเข้ามื้อกลางวันที่ถ่ายรูปไว้แล้วแทนที่จะเป็นของว่างมื้อใหม่
+const MEAL_TIMES_MIN = [7 * 60, 12 * 60 + 20, 15 * 60 + 30, 19 * 60]; // เช้า/กลางวัน/ของว่าง/เย็น เป็นนาที
+const MEAL_BOUNDARIES_MIN = MEAL_TIMES_MIN.slice(0, -1).map((t, i) => (t + MEAL_TIMES_MIN[i + 1]) / 2);
+
+/** map "นาทีตั้งแต่ 00:00" → ดัชนีมื้อที่ใกล้เวลานั้นที่สุด (ใช้จุดกึ่งกลางระหว่างเวลามื้อ ไม่ใช่ตัดชั่วโมงเต็ม) */
+export function mealIndexForMinutes(mins) {
+  let i = 0;
+  while (i < MEAL_BOUNDARIES_MIN.length && mins >= MEAL_BOUNDARIES_MIN[i]) i++;
+  return i;
+}
+
 function guessMealIdx() {
-  const h = new Date().getHours();
-  if (h < 10) return 0;
-  if (h < 15) return 1;
-  if (h < 17) return 2;
-  return 3;
+  const now = new Date();
+  return mealIndexForMinutes(now.getHours() * 60 + now.getMinutes());
 }
 
 /* ── วงแหวน + บรรทัดตาชั่งบนหน้าแรก ─────────────────── */

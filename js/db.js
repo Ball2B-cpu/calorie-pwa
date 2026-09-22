@@ -247,17 +247,16 @@ function mergeTotals(rv, lv, as, acc) {
 
 function mergeItems(rItems, lItems, as, mealPrefix, acc) {
   const R = Array.isArray(rItems) ? rItems : [];
-  const L = Array.isArray(lItems) ? lItems : [];
   const canItem = as === 'ai' || as === 'claude';
-  const len = canItem ? Math.max(R.length, L.length) : R.length;
+  // AI/Claude เขียน items เป็นก้อนเต็มมื้อเสมอ (ไม่ใช่ patch ทีละรายการ) — ไม่ได้ส่ง items มาเลย (undefined) = ไม่แตะมื้อนี้ คง remote ไว้ทั้งหมด
+  if (!canItem || !Array.isArray(lItems)) return R.map((it) => clone(it));
+  const L = lItems;
   const out = [];
-  for (let i = 0; i < len; i++) {
+  for (let i = 0; i < L.length; i++) {
     const ri = R[i];
     const li = L[i];
     const ip = `${mealPrefix}.items[${i}]`;
-    if (ri && li === undefined) { out.push(clone(ri)); continue; }
-    if (!ri && li) {
-      if (!canItem) continue;
+    if (!ri) {
       const item = {};
       if (Object.prototype.hasOwnProperty.call(li, 'name')) item.name = clone(li.name);
       if (Object.prototype.hasOwnProperty.call(li, 'est')) item.est = clone(li.est);
@@ -266,16 +265,17 @@ function mergeItems(rItems, lItems, as, mealPrefix, acc) {
       acc.changed.push(ip);
       continue;
     }
-    const item = ri ? clone(ri) : {};
-    if (canItem && li) {
-      if (Object.prototype.hasOwnProperty.call(li, 'name')) item.name = resolveOwned(ri && ri.name, li.name, `${ip}.name`, acc);
-      if (Object.prototype.hasOwnProperty.call(li, 'est')) item.est = mergeOwnedMap(ri && ri.est, li.est, `${ip}.est`, as, acc, true);
-    }
-    if (as === 'claude' && li && Object.prototype.hasOwnProperty.call(li, 'final')) {
-      item.final = mergeOwnedMap(ri && ri.final, li.final, `${ip}.final`, as, acc, true);
+    const item = clone(ri);
+    if (Object.prototype.hasOwnProperty.call(li, 'name')) item.name = resolveOwned(ri.name, li.name, `${ip}.name`, acc);
+    if (Object.prototype.hasOwnProperty.call(li, 'est')) item.est = mergeOwnedMap(ri.est, li.est, `${ip}.est`, as, acc, true);
+    if (as === 'claude' && Object.prototype.hasOwnProperty.call(li, 'final')) {
+      item.final = mergeOwnedMap(ri.final, li.final, `${ip}.final`, as, acc, true);
     }
     out.push(item);
   }
+  // มื้อที่ AI/Claude คำนวณใหม่สั้นกว่ารอบก่อน = รายการเก่าที่เกินมาต้องตัดทิ้ง ห้ามคงไว้
+  //   (บั๊ก 22 ก.ย.: จดด่วนเข้ามื้อผิด ลบออกจาก raw แล้ว แต่ items ค้างรายการเก่าไว้ ผลรวมกับ items ไม่ตรงกัน — เดิม len=max(R,L) เก็บ ri ส่วนเกินไว้เสมอ)
+  for (let i = L.length; i < R.length; i++) acc.changed.push(`${mealPrefix}.items[${i}]`);
   return out;
 }
 
