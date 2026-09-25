@@ -536,6 +536,17 @@ test('applyFoodTable: คูณจากตารางเอง + เลขท�
   assert(v.ok && v.value.kcal === 424 && v.value.items[0].grams === 150, 'ผ่าน validator แล้วเลขต้องคงเดิม');
 });
 
+test('applyFoodTable: grams=1 กับของต่อกรัม ไม่ทับเลขโมเดล + เตือน (เคสป้ายเซ็ต 24–25 ก.ย.)', () => {
+  const foods = [{ id: 'rice_scoop', name: 'ข้าวสวย', kcal: 134, p: 2.0, g: 80, src: 'std' }];
+  const bad = net.applyFoodTable(estMeal({ items: [estItem({ name: 'クッパ set', foodId: 'rice_scoop', grams: 1, kcal: 780, p: 26.1 })], kcal: 780, p: 26.1, warnings: [] }), foods);
+  assert(bad.items[0].kcal === 780 && bad.items[0].p === 26.1 && bad.kcal === 780, `ต้องคง 780/26.1 ได้ ${bad.items[0].kcal}/${bad.items[0].p}`);
+  assert(bad.warnings.length === 1 && bad.warnings[0].includes('rice_scoop'), `ต้องมีคำเตือน ได้ ${JSON.stringify(bad.warnings)}`);
+  const ok = net.applyFoodTable(estMeal({ items: [estItem({ name: 'ข้าวสวย', foodId: 'rice_scoop', grams: 150, kcal: 240, p: 3 })], kcal: 240, p: 3 }), foods);
+  assert(ok.items[0].kcal === 251 && ok.items[0].p === 3.8 && ok.items[0].basis === 'std', `ข้าว 150 g ต้องได้ 251 จากตาราง ได้ ${ok.items[0].kcal}`);
+  const small = net.applyFoodTable(estMeal({ items: [estItem({ foodId: 'rice_scoop', grams: 1, kcal: 30, p: 0 })], kcal: 30, p: 0 }), foods);
+  assert(small.items[0].kcal === 2, `ของเล็ก (<100) ต้องทำเหมือนเดิม ได้ ${small.items[0].kcal}`);
+});
+
 test('applyFoodTable: เมนูโรงอาหาร = เลขป้าย × สัดส่วน, p ใช้ของโมเดล (เคส 親子丼 15 ก.ย.)', () => {
   const foods = [{ id: 'menu_0915_1', name: 'B定食①丼 親子丼', kcal: 828, p: null, g: 1, src: 'label' }];
   const full = net.applyFoodTable(estMeal({ items: [estItem({ foodId: 'menu_0915_1', grams: 1, kcal: 580, p: 30 })], kcal: 580, p: 30 }), foods);

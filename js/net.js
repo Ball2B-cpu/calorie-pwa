@@ -65,6 +65,8 @@ const SYSTEM_PROMPT = `คุณประมาณแคลอรีและโ
 ถ้าในรูปมีตารางโภชนาการ (栄養成分表示 100gあたり) ของรายการนั้น ใส่ labelKcal100 / labelP100 ตามฉลาก (ไม่มีฉลาก = 0) — ค่าฉลากในรูปชนะตาราง · น้ำหนักแพ็ค (内容量/正味量 เช่น 212g) ใส่ใน qty แต่ grams ต้องเป็นปริมาณที่กินจริง ถ้าผู้ใช้ไม่บอกว่ากินหมดแพ็คไหม ให้กะจากรูปและใส่ในรายการ unclear
 ถ้าผู้ใช้พิมพ์แคลของรายการนั้นมาเอง (เช่น "11 กิโลแคล") ใส่ userKcal = เลขนั้น ไม่พิมพ์ = 0
 รายการที่ไม่มีในตาราง: foodId "" · grams ประมาณ · kcal/p ประมาณจากความรู้อาหารทั่วไป basis "guess"
+ถ้าในรูปมีป้าย/ฉลากโภชนาการของทั้งเซ็ต/ทั้งจาน (เช่น 栄養値表示 エネルギー 780kcal ต่อที่ ไม่ใช่ต่อ 100 g) และเมนูนั้นไม่อยู่ในตารางอาหาร: ใส่เป็นรายการเดียว foodId "" · grams 0 · labelKcal100 0 · kcal = kcal บนป้าย × สัดส่วนที่กิน · p = โปรตีนบนป้าย × สัดส่วน · basis "label" · ถ้าป้ายบอกว่ารวมข้าว/มิโซะแล้ว (ご飯&みそ汁含む) ห้ามเพิ่มข้าว/มิโซะแยก · กับข้าวที่ป้ายไม่ครอบคลุมค่อยแยกเป็นรายการ
+ห้ามใช้ grams เป็นจำนวนเซ็ตกับรายการในตารางที่คิดต่อกรัม (เช่น ข้าวสวย grams 1 = 1 กรัม ไม่ใช่ 1 เซ็ต)
 ห้ามให้ kcal 0 กับของที่มีพลังงานจริง (เช่น ปูอัด/カニカマ ~90 kcal ต่อ 100 g) — ไม่เห็นปริมาณให้ประมาณจากรูปแล้วใส่ conf ต่ำ
 
 ตารางอาหาร:
@@ -295,7 +297,17 @@ export function applyFoodTable(raw, foods) {
     const f = it.foodId ? byId.get(String(it.foodId)) : null;
     const grams = Number(it.grams);
     const perG = f && Number(f.g) > 0 ? 1 / Number(f.g) : 0;
-    if (f && perG && grams > 0) {
+    // กันโมเดลใส่ grams เป็น "จำนวนเซ็ต" กับของที่คิดต่อกรัม (24–25 ก.ย.: ป้ายเซ็ตโรงอาหาร 780 kcal
+    // โมเดลใส่ foodId ข้าวสวย grams 1 → ตารางทับเหลือ 2 kcal) — ของเล็ก (โมเดล < 100 kcal) ทำเหมือนเดิม
+    const modelK = Number(it.kcal) || 0;
+    const tableK = f && perG && grams > 0 ? Number(f.kcal) * grams * perG : 0;
+    const badUnit = f && perG && grams > 0 && modelK >= 100
+      && (tableK < modelK * 0.3 || (Number(f.g) > 1 && grams < 5));
+    if (badUnit) {
+      raw.warnings = Array.isArray(raw.warnings) ? raw.warnings : [];
+      raw.warnings.push(`${it.name || it.foodId}: grams=${grams} ไม่เข้ากับหน่วยคลัง ${f.id} — ใช้เลขที่ AI ประเมินแทน`);
+      changed = true;
+    } else if (f && perG && grams > 0) {
       it.kcal = Math.round(Number(f.kcal) * grams * perG);
       // เมนูโรงอาหารไม่มีเลขโปรตีนบนป้าย (p: null) → ใช้ p ที่โมเดลประมาณ
       if (f.p != null) it.p = Math.round(Number(f.p) * grams * perG * 10) / 10;
@@ -753,6 +765,8 @@ export async function estimateMeal({ date, mealId, mealKey, raw, photoBlobs, foo
         if (!checked.ok) {
           throw new NetError(`ผล AI ไม่ผ่านตัวตรวจ: ${checked.error}`, { raw: JSON.stringify(parsed).slice(0, 400) });
         }
+        // มื้อมีรูปแต่ยอดต่ำผิดปกติ = น่าจะคิดหน่วยผิด (24–25 ก.ย.: มื้อกลางวันเหลือ 2 kcal) → เตือนให้ตรวจ
+        if (blobs.length && checked.value.kcal < 50) checked.value.unclear.push('ยอดมื้อต่ำผิดปกติ (<50 kcal) — ตรวจอีกครั้ง');
       } catch (e) {
         // คำตอบพัง → ลองรูปแบบถัดไป/โมเดลถัดไป แทนการล้มทั้งงาน (ข้อความ error บอกชื่อโมเดลด้วย)
         lastErr = new NetError(`${model}: ${errText(e)}`, { raw: e && e.raw });
