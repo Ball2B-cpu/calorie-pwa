@@ -39,6 +39,7 @@ let monthCache = [];
 let wired = false;
 let dayGen = 0;
 let monthGen = 0;
+let viewYm = ''; // เดือนที่หน้า 'ย้อนหลัง' กำลังดู (YYYY-MM) — '' = ใช้เดือนของ curDate
 let formGen = 0;
 let formBuilt = false;
 let mealIds = [null, null, null, null];
@@ -678,6 +679,16 @@ function drawTrend(days, field, svgId, rangeId, noteId, color, unit, noteFn) {
   setText(note, noteFn(last - first, last, ds.length));
 }
 
+function shiftMonth(step) {
+  const base = viewYm || (curDate || todayISO()).slice(0, 7);
+  const [y, m] = base.split('-').map(Number);
+  const t = new Date(y, m - 1 + step, 1);
+  const ym = t.getFullYear() + '-' + pad2(t.getMonth() + 1);
+  if (ym > todayISO().slice(0, 7)) return;
+  viewYm = ym;
+  paintMonth();
+}
+
 function goToDay(date) {
   curDate = date;
   const tab = $('tabDay');
@@ -689,8 +700,11 @@ async function paintMonth() {
   const gen = ++monthGen;
   try {
   const p = profile();
-  const ym = (curDate || todayISO()).slice(0, 7);
+  if (!/^\d{4}-\d{2}$/.test(viewYm)) viewYm = (curDate || todayISO()).slice(0, 7);
+  const ym = viewYm;
   setText($('monthTitle'), formatMonth(ym));
+  const mNext = $('monthNext');
+  if (mNext) mNext.disabled = ym >= todayISO().slice(0, 7);
 
   let days = [];
   try {
@@ -699,6 +713,21 @@ async function paintMonth() {
     days = [];
   }
   if (gen !== monthGen) return;
+
+  // กราฟแนวโน้ม: หน้าต่าง 30 วันย้อนจาก min(วันนี้, วันสุดท้ายของเดือนที่ดู) — ไม่รีเซ็ตตอนขึ้นเดือนใหม่
+  const [wy, wm] = ym.split('-').map(Number);
+  const monthEnd = ym + '-' + pad2(new Date(wy, wm, 0).getDate());
+  const winEnd = monthEnd < todayISO() ? monthEnd : todayISO();
+  const winStart = addDays(winEnd, -29);
+  let trendDays = days;
+  if (winStart.slice(0, 7) !== ym) {
+    let prevDays = [];
+    try { prevDays = await db.listDays(winStart.slice(0, 7)); } catch (_) { prevDays = []; }
+    if (gen !== monthGen) return;
+    trendDays = prevDays.concat(days);
+  }
+  trendDays = trendDays.filter((d) => d && d.date >= winStart && d.date <= winEnd)
+    .sort((a, b) => (a.date < b.date ? -1 : a.date > b.date ? 1 : 0));
   monthCache = days;
 
   const closed = [];
@@ -782,21 +811,21 @@ async function paintMonth() {
 
   try { const x = await import('./ui-1a.js'); await x.afterMonth(); } catch (_) {}
 
-  drawTrend(days, 'weight', 'spark', 'wRange', 'wNote', 'var(--eaten)', ' กก.',
+  drawTrend(trendDays, 'weight', 'spark', 'wRange', 'wNote', 'var(--eaten)', ' กก.',
     (diff, last, n) => move(diff, ' กก.', n + ' วัน') + ' · เหลือถึงเป้า '
       + p.goalWeight + ' กก. อีก ' + (last - p.goalWeight).toFixed(1) + ' กก.');
 
-  drawTrend(days, 'muscle', 'sparkM', 'mRange', 'mNote', 'var(--protein)', ' กก.',
+  drawTrend(trendDays, 'muscle', 'sparkM', 'mRange', 'mNote', 'var(--protein)', ' กก.',
     (diff, last, n) => move(diff, ' กก.', n + ' วันที่วัด') + ' · '
       + (diff <= -0.3 ? 'กำลังเสียกล้ามเนื้อ ต้องเพิ่มโปรตีน'
         : diff < -0.05 ? 'ลงนิดหน่อย ยังอยู่ในช่วงแกว่งของเครื่อง — เฝ้าดูต่อ'
         : 'ทรงตัวดี น้ำหนักที่ลงเป็นไขมัน'));
 
-  drawTrend(days, 'fat', 'sparkF', 'fRange', 'fatNote', 'var(--warn)', '%',
+  drawTrend(trendDays, 'fat', 'sparkF', 'fRange', 'fatNote', 'var(--warn)', '%',
     (diff, last, n) => move(diff, ' จุด', n + ' วันที่วัด')
       + ' · เครื่อง BIA อ่านต่ำกว่าจริง ดูทิศทางอย่างเดียว');
 
-  paintWaist().catch(() => {});
+  paintWaist(winEnd).catch(() => {});
   } catch (_) {
     if (gen !== monthGen) return;
     console.warn('[ui] renderMonth failed');
@@ -819,6 +848,8 @@ function wire() {
     renderForm();
   });
   $('fWeight')?.addEventListener('input', updateDelta);
+  $('monthPrev')?.addEventListener('click', () => shiftMonth(-1));
+  $('monthNext')?.addEventListener('click', () => shiftMonth(1));
 
   $('sOrKey')?.addEventListener('change', () => saveSecret('cal.or_key', 'sOrKey', 'sOrKeyHint'));
   $('sGhPat')?.addEventListener('change', () => saveSecret('cal.gh_pat', 'sGhPat', 'sGhPatHint'));
@@ -880,7 +911,7 @@ export function onShow(which) {
     revokePhotoUrls();
   }
   if (which === 'Day') renderDay();
-  else if (which === 'Month') renderMonth();
+  else if (which === 'Month') { viewYm = ''; renderMonth(); }
   else if (which === 'Form') {
     const d = $('fDate') && $('fDate').value;
     if (!d || formLoadedDate !== d) renderForm();
@@ -1248,16 +1279,17 @@ async function lastBodyRef(beforeDate) {
 }
 
 /** รอบเอว วัดสัปดาห์ละครั้ง ไม่ใช่ทุกวัน — ไล่ย้อนข้ามเดือนหาสองค่าล่าสุด (ไม่ใช้ paintMonth's days เพราะอาจไม่พอ) */
-async function lastWaistPair() {
+async function lastWaistPair(endDate) {
+  const end = endDate || todayISO();
   const found = [];
-  let ym = todayISO().slice(0, 7);
+  let ym = end.slice(0, 7);
   for (let i = 0; i < 8 && found.length < 2; i++) {
     if (!/^\d{4}-\d{2}$/.test(ym)) break;
     let days = [];
     try { days = await db.listDays(ym); } catch (_) { days = []; }
     for (let k = days.length - 1; k >= 0 && found.length < 2; k--) {
       const d = days[k];
-      if (d && bodyNum(d, 'waist') != null) found.push(d);
+      if (d && d.date <= end && bodyNum(d, 'waist') != null) found.push(d);
     }
     const [y, m] = ym.split('-').map(Number);
     ym = m === 1 ? (y - 1) + '-12' : y + '-' + pad2(m - 1);
@@ -1265,12 +1297,12 @@ async function lastWaistPair() {
   return found;
 }
 
-async function paintWaist() {
+async function paintWaist(endDate) {
   const range = $('waistRange');
   const note = $('waistNote');
   if (!range || !note) return;
   const gen = monthGen;
-  const [latest, prev] = await lastWaistPair();
+  const [latest, prev] = await lastWaistPair(endDate);
   if (gen !== monthGen) return;
   if (!latest) {
     setText(range, '—');

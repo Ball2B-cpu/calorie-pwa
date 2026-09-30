@@ -139,7 +139,11 @@
   <!-- ── ย้อนหลัง: 7 วัน / ทั้งเดือน ─────────────────── -->
   <section id="viewMonth" class="view" hidden>
     <div class="rangebar">
-      <div class="date" id="monthTitle">—</div>
+      <div class="daynav">
+        <button class="arrow" id="monthPrev" type="button" aria-label="เดือนก่อน">‹</button>
+        <div class="date" id="monthTitle">—</div>
+        <button class="arrow" id="monthNext" type="button" aria-label="เดือนถัดไป">›</button>
+      </div>
       <div class="seg-toggle" role="group" aria-label="ช่วงเวลา">
         <button type="button" id="rangeWeek" aria-pressed="false">7 วัน</button>
         <button type="button" id="rangeMonth" aria-pressed="true">ทั้งเดือน</button>
