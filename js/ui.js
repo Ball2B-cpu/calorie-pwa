@@ -30,7 +30,7 @@ const STATE_LABEL = {
   error: 'ส่งไม่สำเร็จ',
   synced: 'ส่งครบแล้ว',
 };
-const DEFAULT_PROFILE = { limit: 1800, tdee: 2450, proteinGoal: 140, goalWeight: 87.5 };
+const DEFAULT_PROFILE = { limit: 1800, tdee: 2450, proteinGoal: 140, fiberGoal: 25, goalWeight: 87.5 };
 
 let foodsCatalog = null;
 let curDate = '';
@@ -60,6 +60,7 @@ function profile() {
       limit: num(o.limit) ?? DEFAULT_PROFILE.limit,
       tdee: num(o.tdee) ?? DEFAULT_PROFILE.tdee,
       proteinGoal: num(o.proteinGoal) ?? DEFAULT_PROFILE.proteinGoal,
+      fiberGoal: num(o.fiberGoal) ?? DEFAULT_PROFILE.fiberGoal,
       goalWeight: num(o.goalWeight) ?? DEFAULT_PROFILE.goalWeight,
     };
   } catch (_) {
@@ -134,7 +135,8 @@ function layer(obj) {
   const kcal = num(obj.kcal);
   const p = num(obj.p);
   if (kcal == null && p == null) return null;
-  return { kcal: kcal ?? 0, p: p ?? 0 };
+  // ใยอาหารเพิ่มทีหลัง (7 ต.ค.) — มื้อเก่าไม่มี fib = null ห้ามถือเป็น 0
+  return { kcal: kcal ?? 0, p: p ?? 0, fib: num(obj.fib) };
 }
 
 function itemNums(it) {
@@ -155,24 +157,25 @@ function freshFinal(m) {
 }
 
 function mealNums(m) {
-  if (!m) return { kcal: 0, p: 0, est: false };
+  if (!m) return { kcal: 0, p: 0, fib: null, est: false };
   const fin = freshFinal(m);
   if (fin) return { ...fin, est: false };
   const est = layer(m.est);
   if (est) return { ...est, est: true };
   const stale = layer(m.final);
   if (stale) return { ...stale, est: true };
-  let kcal = 0, p = 0, any = false, usedEst = false;
+  let kcal = 0, p = 0, fib = null, any = false, usedEst = false;
   for (const it of m.items || []) {
     const n = itemNums(it);
     if (!n) continue;
     any = true;
     kcal += n.kcal;
     p += n.p;
+    if (n.fib != null) fib = (fib ?? 0) + n.fib;
     if (n.est) usedEst = true;
   }
-  if (any) return { kcal, p, est: usedEst };
-  return { kcal: 0, p: 0, est: false };
+  if (any) return { kcal, p, fib, est: usedEst };
+  return { kcal: 0, p: 0, fib: null, est: false };
 }
 
 function visibleMeals(d) {
@@ -218,6 +221,28 @@ function pOf(d) {
   const est = layer(d.totals && d.totals.est);
   if (est) return { v: est.p, est: true };
   return { v: 0, est: false };
+}
+
+/** ใยอาหารรายวัน: final.fib → Σ มื้อ · missing = จำนวนมื้อที่มีเลขแคลแต่ยังไม่มีเลขใยอาหาร (มื้อก่อน 7 ต.ค.) */
+function fibOf(d) {
+  if (!d) return { v: null, est: false, missing: 0 };
+  const fin = layer(d.totals && d.totals.final);
+  if (fin && fin.fib != null) return { v: fin.fib, est: false, missing: 0 };
+  let sum = null, anyEst = false, missing = 0;
+  for (const m of visibleMeals(d)) {
+    const n = mealNums(m);
+    if (!n.kcal && !n.p && !layer(m.final) && !layer(m.est)) continue;
+    if (n.fib == null) {
+      if (n.kcal > 0) missing++;
+      continue;
+    }
+    sum = (sum ?? 0) + n.fib;
+    if (n.est) anyEst = true;
+  }
+  if (sum != null) return { v: Math.round(sum * 10) / 10, est: anyEst, missing };
+  const est = layer(d.totals && d.totals.est);
+  if (est && est.fib != null && !missing) return { v: est.fib, est: true, missing: 0 };
+  return { v: null, est: false, missing };
 }
 
 function finalOf(d) {
@@ -506,6 +531,13 @@ function paintMeals(d) {
     pb.textContent = noNum ? '—' : fmtP(nums.p);
     markEst(pb, nums.est, true);
     pline.append(pb, document.createTextNode(' g'));
+    if (nums.fib != null) {
+      pline.append(document.createTextNode(' · F '));
+      const fb = el('span');
+      fb.textContent = fmtP(nums.fib);
+      markEst(fb, nums.est, true);
+      pline.append(fb, document.createTextNode(' g'));
+    }
     mnums.appendChild(pline);
 
     row.append(swatch, mname, mnums, el('span', 'chev', '▶'));
@@ -528,6 +560,7 @@ function paintMeals(d) {
         ip.textContent = fmtP(nms.p);
         markEst(ip, nms.est, true);
         v.append(ip);
+        if (nms.fib != null && nms.fib > 0) v.append(document.createTextNode(' · F ' + fmtP(nms.fib)));
         item.append(n, v);
         list.appendChild(item);
       }
@@ -572,6 +605,7 @@ async function paintDay() {
   const p = profile();
   setText($('limit'), p.limit.toLocaleString('en-US'));
   setText($('pgoal'), String(p.proteinGoal));
+  setText($('fgoal'), String(p.fiberGoal));
   setText($('date'), formatFull(curDate));
   updateDayNav();
 
@@ -612,6 +646,20 @@ async function paintDay() {
   setText($('pnote'), pleft > 0
     ? 'ขาดอีก ' + fmtP(pleft) + ' g ≈ อกไก่ ' + Math.round(pleft / 23 * 100) + ' g'
     : 'ถึงเป้าแล้ว');
+
+  const fiber = fibOf(d);
+  const fnow = $('fnow');
+  if (fnow) {
+    fnow.textContent = fiber.v == null ? '—' : fmtP(fiber.v);
+    markEst(fnow, fiber.est, true);
+  }
+  const ffill = $('ffill');
+  if (ffill) ffill.style.width = Math.min(100, ((fiber.v || 0) / p.fiberGoal) * 100) + '%';
+  const fleft = p.fiberGoal - (fiber.v || 0);
+  // กีวี 1 ลูก ≈ 2.5 g
+  setText($('fnote'), (fiber.v == null ? 'ยังไม่มีเลขใยอาหาร'
+    : (fleft > 0 ? 'ขาดอีก ' + fmtP(fleft) + ' g ≈ กีวี ' + Math.max(1, Math.round(fleft / 2.5)) + ' ลูก' : 'ถึงเป้าแล้ว'))
+    + (fiber.missing ? ' · ' + fiber.missing + ' มื้อยังไม่มีเลข' : ''));
 
   setDayState(d);
   paintMeals(d);

@@ -50,11 +50,11 @@
     "outside": false,              // 👤 แอพ — true = มื้อที่ไม่ได้ทำเอง (เลขจะแม่นน้อยกว่า)
     "items": [{
       "name": "ข้าวโอ๊ต Quaker 24 g",                                  // 🤖 AI เสนอ · Claude แก้ได้
-      "est":  { "kcal": 97, "p": 3.0, "conf": 0.6, "basis": "std", "needLabel": false },
-      "final":{ "kcal": 97, "p": 3.0, "src": "label", "foodId": "quaker_oat" }
+      "est":  { "kcal": 97, "p": 3.0, "fib": 2.4, "conf": 0.6, "basis": "std", "needLabel": false },
+      "final":{ "kcal": 97, "p": 3.0, "fib": 2.4, "src": "label", "foodId": "quaker_oat" }
     }],
-    "est":   { "kcal": 462, "p": 39 },      // 🤖 AI — ผลรวมมื้อ
-    "final": { "kcal": 470, "p": 40 },      // 🤖 Claude
+    "est":   { "kcal": 462, "p": 39, "fib": 4.1 },      // 🤖 AI — ผลรวมมื้อ
+    "final": { "kcal": 470, "p": 40, "fib": 4.1 },      // 🤖 Claude
     "comment": "ไม่ใส่น้ำมัน"               // 🤖 Claude — คอมเมนต์ต่อมื้อที่เคยพิมพ์มือในไดอารี
   }],
 
@@ -66,7 +66,7 @@
     "comment": "", "advice": "", "checkedAt": "", "by": "claude-opus-5"
   },
 
-  "totals": { "est": { "kcal": 1712, "p": 132 }, "final": { "kcal": 1748, "p": 141 } },
+  "totals": { "est": { "kcal": 1712, "p": 132, "fib": 18.5 }, "final": { "kcal": 1748, "p": 141, "fib": 19 } },
   "closed": false,                 // 🤖 Claude เท่านั้น — true = ปิดยอดวันแล้ว (ตรวจครบ)
 
   "savedAt": "…",                  // 👤 แอพ — ทุกครั้งที่กด "บันทึกไว้ก่อน"
@@ -76,6 +76,13 @@
   "history": []                    // [{at, by, fields:[], rev}] เก็บท้ายสุด 50 รายการ
 }
 ```
+
+### ใยอาหาร `fib` (กรัม) — เพิ่ม 7 ต.ค. 2026 · key เสริม ไม่บังคับ จึงไม่ขึ้นเลข `schema`
+- อยู่ข้าง `kcal`/`p` ทุกชั้น (`items[].est/final` · `meals[].est/final` · `totals.est/final`) เจ้าของเดียวกับชั้นนั้น
+- **ไม่มี key หรือ `null` = ยังไม่รู้ ห้ามถือเป็น 0** (วันก่อน 7 ต.ค. ไม่มีเลย) · มื้อที่ไม่มีเลขจะไม่ถูกนับ และแอพบอกว่า "n มื้อยังไม่มีเลข"
+- ผลรวม = Σ เฉพาะที่มีเลข · ไม่มีสักรายการ = `null`
+- คลังอาหาร `data/foods.json` ใส่ `fib` ต่อหน่วยเดียวกับ `kcal` ได้ (ไม่ใส่ = ให้ AI ประมาณ)
+- เป้า: `profile.fiberGoal` (ค่าตั้งต้น 25 g)
 
 ### ตาราง ownership = กฎของ `mergeDay()`
 
@@ -121,7 +128,7 @@
 
 ## ค่าตั้งต้น — `profile.json` (อยู่ใน repo ส่วนตัว ไม่ใช่ repo โค้ด)
 ```json
-{ "limit": 1800, "tdee": 2450, "proteinGoal": 140, "goalWeight": 87.5 }
+{ "limit": 1800, "tdee": 2450, "proteinGoal": 140, "fiberGoal": 25, "goalWeight": 87.5 }
 ```
 เพดานตัดสินสีของวัน: `ceil = min(tdee, garmin.burn ?? tdee)` (เอาค่าที่เข้มกว่าเสมอ)
 

@@ -21,7 +21,8 @@
 
    validator ของผล AI (ล้มข้อใดข้อหนึ่ง = ไม่เขียน est แต่เก็บคำตอบดิบไว้ให้ตรวจ):
      items 1-30 รายการ · kcal/p เป็นเลข finite ≥0 · |Σitems.kcal − kcal| ≤ 5% (ไม่ตรงใช้ Σitems)
-     kcal ≤ 2500 ต่อมื้อ · p ≤ 200 · conf อยู่ใน 0..1 */
+     kcal ≤ 2500 ต่อมื้อ · p ≤ 200 · conf อยู่ใน 0..1
+     fib (ใยอาหาร g) ไม่บังคับ: เลขเพี้ยน/ไม่มี = null ไม่ล้มทั้งก้อน · fib รวม = Σitems.fib เสมอ */
 
 import * as db from './db.js';
 import * as ui from './ui.js';
@@ -55,18 +56,20 @@ const PAYLOAD_MAX = 8 * 1024;
 const OR_TIMEOUT_MS = 45000;
 const MEAL_KCAL_MAX = 2500;
 const MEAL_P_MAX = 200;
+const MEAL_FIB_MAX = 80;
 
-const SYSTEM_PROMPT = `คุณประมาณแคลอรีและโปรตีนของมื้ออาหาร ตอบเป็น JSON ตาม schema เท่านั้น ห้ามมีข้อความอื่น ห้ามใส่ markdown fence
+const SYSTEM_PROMPT = `คุณประมาณแคลอรี โปรตีน และใยอาหารของมื้ออาหาร ตอบเป็น JSON ตาม schema เท่านั้น ห้ามมีข้อความอื่น ห้ามใส่ markdown fence
 
 บริบท: อาหารไทยและญี่ปุ่นของคนไทยที่ทำงานในญี่ปุ่น
 หน่วยที่ใช้จริง: ทัพพี (80 g) · ชต. · ชช. · ฟอง · ลูก
 
 ถ้ารายการตรงกับตารางอาหารด้านล่าง ใส่ foodId = id ในตาราง และ grams = กรัมที่กินจริง (ผู้ใช้พิมพ์กรัมมา ใช้ตามนั้นเป๊ะ · ไม่ได้บอก ประมาณจากรูป/หน่วยในตาราง) ตอบ basis:"label" หรือ "std" — แอพจะคูณเลขจากตารางเอง
-ถ้าในรูปมีตารางโภชนาการ (栄養成分表示 100gあたり) ของรายการนั้น ใส่ labelKcal100 / labelP100 ตามฉลาก (ไม่มีฉลาก = 0) — ค่าฉลากในรูปชนะตาราง · น้ำหนักแพ็ค (内容量/正味量 เช่น 212g) ใส่ใน qty แต่ grams ต้องเป็นปริมาณที่กินจริง ถ้าผู้ใช้ไม่บอกว่ากินหมดแพ็คไหม ให้กะจากรูปและใส่ในรายการ unclear
+ถ้าในรูปมีตารางโภชนาการ (栄養成分表示 100gあたり) ของรายการนั้น ใส่ labelKcal100 / labelP100 / labelFib100 (食物繊維) ตามฉลาก (ไม่มีฉลาก/ฉลากไม่มีบรรทัดนั้น = 0) — ค่าฉลากในรูปชนะตาราง · น้ำหนักแพ็ค (内容量/正味量 เช่น 212g) ใส่ใน qty แต่ grams ต้องเป็นปริมาณที่กินจริง ถ้าผู้ใช้ไม่บอกว่ากินหมดแพ็คไหม ให้กะจากรูปและใส่ในรายการ unclear
 ถ้าผู้ใช้พิมพ์แคลของรายการนั้นมาเอง (เช่น "11 กิโลแคล") ใส่ userKcal = เลขนั้น ไม่พิมพ์ = 0
 รายการที่ไม่มีในตาราง: foodId "" · grams ประมาณ · kcal/p ประมาณจากความรู้อาหารทั่วไป basis "guess"
 ถ้าในรูปมีป้าย/ฉลากโภชนาการของทั้งเซ็ต/ทั้งจาน (เช่น 栄養値表示 エネルギー 780kcal ต่อที่ ไม่ใช่ต่อ 100 g) และเมนูนั้นไม่อยู่ในตารางอาหาร: ใส่เป็นรายการเดียว foodId "" · grams 0 · labelKcal100 0 · kcal = kcal บนป้าย × สัดส่วนที่กิน · p = โปรตีนบนป้าย × สัดส่วน · basis "label" · ถ้าป้ายบอกว่ารวมข้าว/มิโซะแล้ว (ご飯&みそ汁含む) ห้ามเพิ่มข้าว/มิโซะแยก · กับข้าวที่ป้ายไม่ครอบคลุมค่อยแยกเป็นรายการ
 ห้ามใช้ grams เป็นจำนวนเซ็ตกับรายการในตารางที่คิดต่อกรัม (เช่น ข้าวสวย grams 1 = 1 กรัม ไม่ใช่ 1 เซ็ต)
+fib = ใยอาหาร (食物繊維) เป็นกรัม ของปริมาณที่กินจริง · ประมาณจากความรู้อาหารทั่วไปได้ (ข้าวขาว ~0.4 g/100 g · ผัก ~2–3 g/100 g · เห็ด ~3–4 g/100 g · ผลไม้ ~1.5–3 g/100 g · เนื้อ/ไข่/ปลา/เวย์ = 0) · fib รวมของมื้อ = ผลรวมรายการ
 ห้ามให้ kcal 0 กับของที่มีพลังงานจริง (เช่น ปูอัด/カニカマ ~90 kcal ต่อ 100 g) — ไม่เห็นปริมาณให้ประมาณจากรูปแล้วใส่ conf ต่ำ
 
 ตารางอาหาร:
@@ -78,7 +81,7 @@ const SYSTEM_PROMPT = `คุณประมาณแคลอรีและโ
 ถ้ามีฉลากในรูป (ญี่ปุ่น) ให้อ่านค่าจากฉลากเป็นหลัก และคูณตามปริมาณที่กินจริง
 
 schema ผลลัพธ์:
-{"items":[{"name":"","qty":"","foodId":"","grams":0,"userKcal":0,"labelKcal100":0,"labelP100":0,"kcal":0,"p":0,"conf":0.0,"basis":"label|std|guess","needLabel":false}],"kcal":0,"p":0,"confidence":0.0,"warnings":[],"unclear":[]}`;
+{"items":[{"name":"","qty":"","foodId":"","grams":0,"userKcal":0,"labelKcal100":0,"labelP100":0,"labelFib100":0,"kcal":0,"p":0,"fib":0,"conf":0.0,"basis":"label|std|guess","needLabel":false}],"kcal":0,"p":0,"fib":0,"confidence":0.0,"warnings":[],"unclear":[]}`;
 
 const ESTIMATE_JSON_SCHEMA = {
   name: 'meal_estimate',
@@ -100,22 +103,25 @@ const ESTIMATE_JSON_SCHEMA = {
             userKcal: { type: 'number' },
             labelKcal100: { type: 'number' },
             labelP100: { type: 'number' },
+            labelFib100: { type: 'number' },
             kcal: { type: 'number' },
             p: { type: 'number' },
+            fib: { type: 'number' },
             conf: { type: 'number' },
             basis: { type: 'string', enum: ['label', 'std', 'guess'] },
             needLabel: { type: 'boolean' },
           },
-          required: ['name', 'qty', 'foodId', 'grams', 'userKcal', 'labelKcal100', 'labelP100', 'kcal', 'p', 'conf', 'basis', 'needLabel'],
+          required: ['name', 'qty', 'foodId', 'grams', 'userKcal', 'labelKcal100', 'labelP100', 'labelFib100', 'kcal', 'p', 'fib', 'conf', 'basis', 'needLabel'],
         },
       },
       kcal: { type: 'number' },
       p: { type: 'number' },
+      fib: { type: 'number' },
       confidence: { type: 'number' },
       warnings: { type: 'array', items: { type: 'string' } },
       unclear: { type: 'array', items: { type: 'string' } },
     },
-    required: ['items', 'kcal', 'p', 'confidence', 'warnings', 'unclear'],
+    required: ['items', 'kcal', 'p', 'fib', 'confidence', 'warnings', 'unclear'],
   },
 };
 
@@ -255,6 +261,7 @@ function matchFoods(raw, foods) {
     }
     if (!hit) continue;
     const row = { name: f.name, unit: f.unit, kcal: f.kcal, p: f.p, src: f.src };
+    if (f.fib != null) row.fib = f.fib;
     if (f.id) row.id = f.id;
     if (f.g != null) row.g = f.g;
     if (Array.isArray(f.alias) && f.alias.length) row.alias = f.alias;
@@ -266,6 +273,7 @@ function matchFoods(raw, foods) {
 /**
  * คิดเลขจากตารางด้วยโค้ด ไม่ให้โมเดลคูณเอง (13 ก.ย.: ข้าว 150 g ได้ 201 แทน 252, ขิงดองที่บอลพิมพ์ 11 kcal ได้ 10)
  * ลำดับ: userKcal ที่ผู้ใช้พิมพ์ > ฉลากในรูป (labelKcal100 × grams) > ตาราง (foodId × grams/g) > ค่าที่โมเดลประมาณ
+ * ใยอาหาร (fib): ฉลากในรูป > ตาราง (เฉพาะของที่คลังมี fib) > ค่าที่โมเดลประมาณ
  * (ปูอัด 13 ก.ย.: ฉลากในรูปเขียน 69 kcal/100g แต่ตารางทับเป็นค่ามาตรฐาน 90)
  * รวม kcal/p ของมื้อคิดใหม่จากรายการเสมอ
  */
@@ -312,6 +320,7 @@ export function applyFoodTable(raw, foods) {
       it.kcal = Math.round(Number(f.kcal) * grams * perG);
       // เมนูโรงอาหารไม่มีเลขโปรตีนบนป้าย (p: null) → ใช้ p ที่โมเดลประมาณ
       if (f.p != null) it.p = Math.round(Number(f.p) * grams * perG * 10) / 10;
+      if (f.fib != null) it.fib = Math.round(Number(f.fib) * grams * perG * 10) / 10;
       it.basis = f.src === 'label' ? 'label' : 'std';
       changed = true;
     }
@@ -321,6 +330,11 @@ export function applyFoodTable(raw, foods) {
       const lp = Number(it.labelP100);
       if (Number.isFinite(lp) && lp > 0) it.p = Math.round(lp * grams / 10) / 10;
       it.basis = 'label';
+      changed = true;
+    }
+    const lf = Number(it.labelFib100);
+    if (Number.isFinite(lf) && lf > 0 && grams > 0) {
+      it.fib = Math.round(lf * grams / 10) / 10;
       changed = true;
     }
     const uk = Number(it.userKcal);
@@ -334,7 +348,28 @@ export function applyFoodTable(raw, foods) {
   if (!changed) return raw;
   const sumK = items.reduce((s, x) => s + (Number(x.kcal) || 0), 0);
   const sumP = items.reduce((s, x) => s + (Number(x.p) || 0), 0);
-  return { ...raw, items, kcal: sumK, p: Math.round(sumP * 10) / 10 };
+  const out = { ...raw, items, kcal: sumK, p: Math.round(sumP * 10) / 10 };
+  const fib = sumFib(items);
+  if (fib != null) out.fib = fib;
+  return out;
+}
+
+/** ใยอาหารเป็นข้อมูลเสริม: นับเฉพาะรายการที่มีเลข · ไม่มีเลยสักรายการ = null (ไม่ใช่ 0) */
+export function fibNum(v) {
+  if (v == null || v === '') return null;
+  const n = Number(v);
+  return Number.isFinite(n) && n >= 0 ? n : null;
+}
+
+function sumFib(list, pick = (x) => x && x.fib) {
+  let sum = 0, any = false;
+  for (const x of list || []) {
+    const n = fibNum(pick(x));
+    if (n == null) continue;
+    sum += n;
+    any = true;
+  }
+  return any ? Math.round(sum * 10) / 10 : null;
 }
 
 function buildSystem(foodTableJson, extra) {
@@ -407,6 +442,7 @@ export function validateEstimate(raw) {
       userKcal: Number.isFinite(Number(it.userKcal)) && Number(it.userKcal) > 0 ? Number(it.userKcal) : 0,
       kcal,
       p,
+      fib: fibNum(it.fib),
       conf,
       basis,
       needLabel: !!it.needLabel,
@@ -423,6 +459,12 @@ export function validateEstimate(raw) {
 
   if (kcal > MEAL_KCAL_MAX) return { ok: false, error: `kcal ต่อมื้อเกิน ${MEAL_KCAL_MAX}`, raw };
   if (p > MEAL_P_MAX) return { ok: false, error: `p ต่อมื้อเกิน ${MEAL_P_MAX}`, raw };
+  // ใยอาหารเพี้ยน (เช่นเอากรัมอาหารมาใส่) ไม่ล้มทั้งมื้อ — ทิ้งเฉพาะเลขใยอาหาร
+  let fib = sumFib(items);
+  if (fib != null && fib > MEAL_FIB_MAX) {
+    for (const it of items) it.fib = null;
+    fib = null;
+  }
 
   let confidence = null;
   if (raw.confidence != null && raw.confidence !== '') {
@@ -438,7 +480,7 @@ export function validateEstimate(raw) {
 
   return {
     ok: true,
-    value: { items, kcal, p, confidence, warnings, unclear },
+    value: { items, kcal, p, fib, confidence, warnings, unclear },
   };
 }
 
@@ -603,15 +645,16 @@ function extractContent(text) {
   return content;
 }
 
-function sumMealEst(meals) {
+export function sumMealEst(meals) {
   let kcal = 0;
   let p = 0;
-  for (const m of meals || []) {
-    if (!m || m.deleted) continue;
+  const live = (meals || []).filter((m) => m && !m.deleted);
+  for (const m of live) {
     if (m.est && Number.isFinite(Number(m.est.kcal))) kcal += Number(m.est.kcal);
     if (m.est && Number.isFinite(Number(m.est.p))) p += Number(m.est.p);
   }
-  return { kcal, p };
+  // fib: null (ไม่ใช่ลบทิ้ง) — merge แบบเติม key จะได้ล้างเลขเก่าที่ค้างจากรอบก่อน
+  return { kcal, p, fib: sumFib(live, (m) => m.est && m.est.fib) };
 }
 
 async function writeEstimate(date, mealId, estimate, model, sig) {
@@ -623,6 +666,7 @@ async function writeEstimate(date, mealId, estimate, model, sig) {
     est: {
       kcal: it.kcal,
       p: it.p,
+      fib: fibNum(it.fib),
       conf: it.conf,
       basis: it.basis,
       needLabel: !!it.needLabel,
@@ -631,7 +675,12 @@ async function writeEstimate(date, mealId, estimate, model, sig) {
   const mealPatch = {
     id: mealId,
     items,
-    est: sig ? { kcal: estimate.kcal, p: estimate.p, sig } : { kcal: estimate.kcal, p: estimate.p },
+    est: {
+      kcal: estimate.kcal,
+      p: estimate.p,
+      fib: fibNum(estimate.fib),
+      ...(sig ? { sig } : {}),
+    },
   };
 
   const after = meals.map((m) => {
@@ -677,6 +726,7 @@ async function prevItemsOf(date, mealId) {
     for (const it of m.items || []) {
       if (!it || !(Number(it.kcal) > 0)) continue;
       const row = { มื้อ: m.key || '', name: it.name, kcal: it.kcal, p: it.p };
+      if (fibNum(it.fib) != null) row.fib = it.fib;
       if (it.foodId) row.foodId = it.foodId;
       if (Number(it.grams) > 0) row.grams = it.grams;
       out.push(row);
@@ -1061,7 +1111,7 @@ async function runAiJob(job) {
     if (meal.est && meal.est.sig === sig) continue;
     try {
       if (isNotEaten(meal)) {
-        await writeEstimate(date, meal.id, { items: [], kcal: 0, p: 0, confidence: 1, warnings: [], unclear: [] }, 'rule:not-eaten', sig);
+        await writeEstimate(date, meal.id, { items: [], kcal: 0, p: 0, fib: 0, confidence: 1, warnings: [], unclear: [] }, 'rule:not-eaten', sig);
         continue;
       }
       const blobs = [];

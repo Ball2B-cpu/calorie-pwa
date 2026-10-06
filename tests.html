@@ -557,6 +557,37 @@ test('applyFoodTable: เมนูโรงอาหาร = เลขป้า�
   assert(v.ok && v.value.kcal === 729 && v.value.items[0].grams === 0.88, 'ผ่าน validator แล้วเลขต้องคงเดิม');
 });
 
+test('ใยอาหาร: ตาราง/ฉลากในรูปคิดเอง · Σitems · เลขเพี้ยนไม่ล้มทั้งมื้อ (เพิ่ม 7 ต.ค.)', () => {
+  const foods = [
+    { id: 'oat', kcal: 141, p: 4.3, fib: 3.5, g: 35, src: 'label' },
+    { id: 'rice_100', kcal: 168, p: 2.5, g: 100, src: 'std' },
+  ];
+  const out = net.applyFoodTable(estMeal({ items: [
+    estItem({ name: 'โอ๊ต', foodId: 'oat', grams: 70, kcal: 280, p: 8, fib: 5 }),
+    estItem({ name: 'ข้าว', foodId: 'rice_100', grams: 100, kcal: 160, p: 2, fib: 0.5 }),
+    estItem({ name: 'บรอกโคลี', foodId: '', grams: 100, labelKcal100: 0, labelFib100: 4.4, kcal: 33, p: 4, fib: 3 }),
+  ] }), foods);
+  const f = out.items.map((x) => x.fib);
+  assert(f[0] === 7 && f[1] === 0.5 && f[2] === 4.4, `ตาราง×grams / คลังไม่มี fib ใช้ของโมเดล / ฉลากชนะ ได้ ${f}`);
+  const v = net.validateEstimate(out);
+  assert(v.ok && v.value.fib === 11.9, `fib รวม = Σitems ได้ ${v.ok && v.value.fib}`);
+
+  const none = net.validateEstimate(estMeal({ items: [estItem()] }));
+  assert(none.ok && none.value.fib === null && none.value.items[0].fib === null, 'โมเดลไม่ตอบ fib = null ไม่ใช่ 0');
+  const bad = net.validateEstimate(estMeal({ items: [estItem({ fib: 'x' }), estItem({ fib: -2 })] }));
+  assert(bad.ok && bad.value.fib === null, 'fib ไม่ใช่เลข/ติดลบ ทิ้งเฉพาะ fib');
+  const huge = net.validateEstimate(estMeal({ items: [estItem({ fib: 150 })] }));
+  assert(huge.ok && huge.value.fib === null && huge.value.kcal === 75, 'fib เกินเพดาน ทิ้ง fib แต่ kcal ยังอยู่');
+
+  const t = net.sumMealEst([
+    { est: { kcal: 400, p: 30, fib: 6 } },
+    { est: { kcal: 500, p: 20 } },
+    { est: { kcal: 100, p: 1, fib: 2.5 }, deleted: true },
+  ]);
+  assert(t.kcal === 900 && t.fib === 6, `totals.est ข้ามมื้อที่ลบ ได้ ${JSON.stringify(t)}`);
+  assert(net.sumMealEst([{ est: { kcal: 1, p: 1 } }]).fib === null, 'ไม่มีมื้อไหนมี fib = null');
+});
+
 test('pull ซ้ำ: เนื้อหาเท่าเดิมไม่นับว่าเปลี่ยน แต่ final ใหม่ต้องนับ', () => {
   const remote = baseDay({ rev: 8, meals: [{ id: 'm1', raw: ['ข้าว'], est: { kcal: 433 }, final: { kcal: 531 } }] });
   const local = baseDay({ rev: 7, meals: [{ id: 'm1', raw: ['ข้าว'], est: { kcal: 433 } }] });

@@ -17,6 +17,7 @@
   --over:#A8563F;
   --over-wash:#F6EDE9;
   --protein:#55628F;
+  --fiber:#5E8550;
   --track:#E6E3DA;
   --zone:#EFECE4;
   --radius:16px;
@@ -38,6 +39,7 @@
     --over:#D3826A;
     --over-wash:#281B17;
     --protein:#8792C4;
+    --fiber:#8DB57E;
     --track:#272B2E;
     --zone:#202427;
   }
@@ -57,6 +59,7 @@
   --over:#D3826A;
   --over-wash:#281B17;
   --protein:#8792C4;
+  --fiber:#8DB57E;
   --track:#272B2E;
   --zone:#202427;
 }
@@ -191,6 +194,7 @@ button{font:inherit;color:inherit}
 .prow .v{font-family:"IBM Plex Mono",ui-monospace,monospace;font-size:12px;color:var(--muted);font-variant-numeric:tabular-nums}
 .pbar{position:relative;height:6px;border-radius:3px;background:var(--track);overflow:hidden}
 .pfill{height:100%;background:var(--protein);border-radius:3px;transition:width .4s ease}
+.pfill.fib{background:var(--fiber)}
 .pnote{font-size:11.5px;color:var(--faint)}
 
 .bodyline{
