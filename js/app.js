@@ -9,11 +9,18 @@ import * as extras from './ui-1a.js';
 const VIEWS = ['Day', 'Month', 'Form', 'Body', 'Settings'];
 const $ = (id) => document.getElementById(id);
 
-export function show(which) {
+export function show(which, dir = 0) {
   for (const v of VIEWS) {
     const sec = $('view' + v), tab = $('tab' + v);
     if (sec) sec.hidden = (v !== which);
     if (tab) tab.setAttribute('aria-current', v === which ? 'page' : 'false');
+  }
+  // ปัดมา: หน้าใหม่เลื่อนเข้าจากฝั่งที่นิ้วปัดไป (dir 1 = ไปหน้าถัดไป · -1 = ย้อน)
+  const sec = $('view' + which);
+  if (sec && dir) {
+    sec.classList.remove('slide-next', 'slide-prev');
+    void sec.offsetWidth;   // รีสตาร์ท animation ถ้าปัดติด ๆ กัน
+    sec.classList.add(dir > 0 ? 'slide-next' : 'slide-prev');
   }
   try { localStorage.setItem('cal.view', which); } catch (_) {}
   ui.onShow?.(which);
@@ -26,6 +33,57 @@ function wireTabs() {
     if (e.key === 'ArrowLeft') ui.goDay?.(-1);
     if (e.key === 'ArrowRight') ui.goDay?.(1);
   });
+}
+
+/* ปัดซ้าย/ขวา = เปลี่ยนหน้าตามลำดับแถบล่าง (ปัดซ้าย → หน้าถัดไป · ปัดขวา → หน้าก่อน · ไม่วนรอบ)
+   ไม่ทำงานเมื่อเริ่มปัดบน: ช่องที่กำลังพิมพ์อยู่ (โฟกัส) · ตัวเลื่อน/ดรอปดาวน์ · แถบที่เลื่อนแนวนอนได้ (จดด่วน) · ป๊อปอัป/ชีต
+   ช่องพิมพ์ที่ยังไม่โฟกัสปัดผ่านได้ — หน้าจด/ตาชั่งเต็มไปด้วยช่องพิมพ์ ไม่งั้นแทบปัดออกจากหน้านั้นไม่ได้
+   ต้องแนวนอนชัด ๆ (|dx| ≥ 60 px และ ≥ 1.5×|dy|) ไม่งั้นการเลื่อนจอขึ้นลงจะกลายเป็นเปลี่ยนหน้า */
+const SWIPE_MIN = 60;
+const SWIPE_SKIP = 'select, input[type=range], [contenteditable], #estDetail, #foodSuggest, #quickSheet, .sheet, .est-pop-card';
+
+function scrollsSideways(node) {
+  for (let n = node; n && n !== document.body; n = n.parentElement) {
+    if (n.scrollWidth > n.clientWidth + 1) {
+      const ox = getComputedStyle(n).overflowX;
+      if (ox === 'auto' || ox === 'scroll') return true;
+    }
+  }
+  return false;
+}
+
+function currentView() {
+  return VIEWS.find((v) => $('view' + v) && !$('view' + v).hidden) || 'Day';
+}
+
+function wireSwipe() {
+  let x0 = 0, y0 = 0, on = false;
+  document.addEventListener('touchstart', (e) => {
+    on = false;
+    if (e.touches.length !== 1) return;
+    const t = e.target;
+    if (t?.closest?.(SWIPE_SKIP) || scrollsSideways(t)) return;
+    const ae = document.activeElement;
+    if (ae && ae.matches?.('input, textarea') && (ae === t || ae.contains?.(t))) return;
+    // ป๊อปอัปเปิดค้างอยู่ (ทับทั้งจอ) → ไม่เปลี่ยนหน้า
+    if (document.querySelector('.sheet:not([hidden]), #estDetail:not([hidden])')) return;
+    x0 = e.touches[0].clientX;
+    y0 = e.touches[0].clientY;
+    on = true;
+  }, { passive: true });
+  document.addEventListener('touchend', (e) => {
+    if (!on) return;
+    on = false;
+    const t = e.changedTouches[0];
+    const dx = t.clientX - x0, dy = t.clientY - y0;
+    if (Math.abs(dx) < SWIPE_MIN || Math.abs(dx) < Math.abs(dy) * 1.5) return;
+    const dir = dx < 0 ? 1 : -1;
+    const i = VIEWS.indexOf(currentView()) + dir;
+    if (i < 0 || i >= VIEWS.length) return;
+    show(VIEWS[i], dir);
+    window.scrollTo(0, 0);
+  });
+  document.addEventListener('touchcancel', () => { on = false; });
 }
 
 /* คิวส่ง: iOS ไม่มี Background Sync → ต้องสะกิดเองทุกจังหวะที่แอพได้กลับมาทำงาน */
@@ -49,7 +107,7 @@ function wirePullRefresh() {
   const appEl = $('app'), ind = $('pullRefresh'), icon = $('pullRefreshIcon'), text = $('pullRefreshText');
   if (!appEl || !ind || !icon || !text) return;
   const MAX = 88, TRIGGER = 62;
-  let startY = 0, curPull = 0, dragging = false, refreshing = false, hapticFired = false;
+  let startX = 0, startY = 0, curPull = 0, dragging = false, refreshing = false, hapticFired = false;
 
   const setPull = (px) => {
     curPull = px;
@@ -72,6 +130,7 @@ function wirePullRefresh() {
   document.addEventListener('touchstart', (e) => {
     if (refreshing || window.scrollY > 0) { dragging = false; return; }
     if (e.target?.closest?.('#estDetail, #foodSuggest, input, textarea, select')) { dragging = false; return; }
+    startX = e.touches[0].clientX;
     startY = e.touches[0].clientY;
     dragging = true;
     hapticFired = false;
@@ -80,6 +139,9 @@ function wirePullRefresh() {
   document.addEventListener('touchmove', (e) => {
     if (!dragging || refreshing) return;
     const dy = e.touches[0].clientY - startY;
+    const dx = e.touches[0].clientX - startX;
+    // ปัดแนวนอน (เปลี่ยนหน้า) ไม่ใช่ดึงรีเฟรช
+    if (!curPull && Math.abs(dx) > Math.abs(dy)) { dragging = false; return; }
     if (dy <= 0 || window.scrollY > 0) { if (curPull) snapBack(); dragging = false; return; }
     appEl.style.transition = 'none';
     ind.style.transition = 'none';
@@ -137,6 +199,7 @@ async function boot() {
   document.documentElement.setAttribute('data-booted', '1');   // บอก error boundary ว่ารอดแล้ว
   wireSync();
   wirePullRefresh();
+  wireSwipe();
 
   const st = $('syncStatus');
   if (st && !(ok.db && ok.ui)) {
