@@ -656,9 +656,9 @@ async function paintDay() {
   const ffill = $('ffill');
   if (ffill) ffill.style.width = Math.min(100, ((fiber.v || 0) / p.fiberGoal) * 100) + '%';
   const fleft = p.fiberGoal - (fiber.v || 0);
-  // กีวี 1 ลูก ≈ 2.5 g
+  // บรอกโคลี (ลวก) ≈ 4.4 g ต่อ 100 g · ปัดทีละ 10 g
   setText($('fnote'), (fiber.v == null ? 'ยังไม่มีเลขใยอาหาร'
-    : (fleft > 0 ? 'ขาดอีก ' + fmtP(fleft) + ' g ≈ กีวี ' + Math.max(1, Math.round(fleft / 2.5)) + ' ลูก' : 'ถึงเป้าแล้ว'))
+    : (fleft > 0 ? 'ขาดอีก ' + fmtP(fleft) + ' g ≈ บรอกโคลี ' + Math.max(10, Math.round(fleft / 4.4 * 10) * 10) + ' g' : 'ถึงเป้าแล้ว'))
     + (fiber.missing ? ' · ' + fiber.missing + ' มื้อยังไม่มีเลข' : ''));
 
   setDayState(d);
