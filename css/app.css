@@ -103,6 +103,7 @@ button{font:inherit;color:inherit}
   max-width:470px;margin:0 auto;
   padding:calc(env(safe-area-inset-top) + 10px) 20px calc(108px + env(safe-area-inset-bottom));
   display:flex;flex-direction:column;gap:14px;
+  position:relative;   /* หน้าเดิมลอย absolute ระหว่างเลื่อนเปลี่ยนหน้า */
   overflow-x:clip;   /* หน้าที่กำลังเลื่อนเข้า (ปัดเปลี่ยนหน้า) ห้ามดันจอให้เลื่อนข้างได้ */
 }
 #topbar{display:flex;align-items:center;justify-content:flex-end;min-height:1.1em}
@@ -113,11 +114,6 @@ button{font:inherit;color:inherit}
 
 .view{display:flex;flex-direction:column;gap:16px}
 .view[hidden]{display:none}
-.view.slide-next{animation:slideNext .22s cubic-bezier(.2,.8,.2,1)}
-.view.slide-prev{animation:slidePrev .22s cubic-bezier(.2,.8,.2,1)}
-@keyframes slideNext{from{transform:translateX(28px);opacity:.4}to{transform:none;opacity:1}}
-@keyframes slidePrev{from{transform:translateX(-28px);opacity:.4}to{transform:none;opacity:1}}
-@media (prefers-reduced-motion: reduce){.view.slide-next,.view.slide-prev{animation:none}}
 
 /* แท็บบาร์: 4 แท็บ + ปุ่มกลมกลาง */
 #tabs{

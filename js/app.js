@@ -9,25 +9,81 @@ import * as extras from './ui-1a.js';
 const VIEWS = ['Day', 'Month', 'Form', 'Body', 'Settings'];
 const $ = (id) => document.getElementById(id);
 
-export function show(which, dir = 0) {
+let curView = 'Day';   // หน้าปัจจุบัน — ห้ามอ่านจาก hidden เพราะระหว่างเลื่อนหน้าเดิมยังโชว์อยู่
+
+export function show(which) {
+  curView = which;
   for (const v of VIEWS) {
     const sec = $('view' + v), tab = $('tab' + v);
     if (sec) sec.hidden = (v !== which);
     if (tab) tab.setAttribute('aria-current', v === which ? 'page' : 'false');
   }
-  // ปัดมา: หน้าใหม่เลื่อนเข้าจากฝั่งที่นิ้วปัดไป (dir 1 = ไปหน้าถัดไป · -1 = ย้อน)
-  const sec = $('view' + which);
-  if (sec && dir) {
-    sec.classList.remove('slide-next', 'slide-prev');
-    void sec.offsetWidth;   // รีสตาร์ท animation ถ้าปัดติด ๆ กัน
-    sec.classList.add(dir > 0 ? 'slide-next' : 'slide-prev');
-  }
   try { localStorage.setItem('cal.view', which); } catch (_) {}
   ui.onShow?.(which);
 }
 
+const reduceMotion = () => { try { return matchMedia('(prefers-reduced-motion: reduce)').matches; } catch (_) { return false; } };
+const EASE = 'cubic-bezier(.22,.8,.24,1)';
+let sliding = null;   // แอนิเมชันที่กำลังเล่น — ปัด/แตะซ้อนให้จบอันเก่าก่อน
+
+const FLOAT_KEYS = ['position', 'top', 'left', 'width', 'pointerEvents', 'transform', 'willChange'];
+function unfloat(el) { if (el) for (const k of FLOAT_KEYS) el.style[k] = ''; }
+/** ให้หน้าลอย (absolute ใน #app) ที่ตำแหน่ง top บนจอ — ใช้ตอนสองหน้าต้องเห็นพร้อมกัน */
+function float(el, top, ref) {
+  el.hidden = false;
+  Object.assign(el.style, {
+    position: 'absolute', top: top + 'px', left: ref.offsetLeft + 'px', width: ref.offsetWidth + 'px', pointerEvents: 'none',
+  });
+}
+const pageW = () => ($('app') && $('app').clientWidth) || window.innerWidth;
+
+/** เปลี่ยนหน้าแบบเลื่อน: หน้าเดิมไหลออก หน้าใหม่ไหลเข้าพร้อมกัน (dir 1 = ไปขวา/ถัดไป · -1 = ย้อน)
+    fromX = ตำแหน่งที่นิ้วลากหน้าเดิมค้างไว้ (px) จะได้ต่อจากจุดนั้นไม่กระตุก */
+function slideTo(which, dir, fromX = 0, ms = 300) {
+  const cur = currentView();
+  const out = $('view' + cur), inn = $('view' + which);
+  if (sliding) sliding();
+  unfloat(inn);   // ถ้าหน้าใหม่โผล่มาระหว่างลาก (peek) กลับเข้า flow ก่อน
+  if (which === cur || !out || !inn || !dir || reduceMotion()) {
+    if (out) out.style.transform = '';
+    show(which);
+    window.scrollTo(0, 0);
+    return;
+  }
+  const w = pageW();
+  // หน้าเดิมลอยค้างไว้ที่ตำแหน่งเดิมบนจอ (absolute) ระหว่างที่หน้าใหม่เข้ามาแทนที่ใน flow
+  const top = out.offsetTop - window.scrollY;
+  show(which);
+  window.scrollTo(0, 0);
+  float(out, top, inn);
+  out.style.transform = `translateX(${fromX}px)`;
+  const a1 = out.animate(
+    [{ transform: `translateX(${fromX}px)`, opacity: 1 }, { transform: `translateX(${-dir * w}px)`, opacity: 0.6 }],
+    { duration: ms, easing: EASE, fill: 'forwards' });
+  const a2 = inn.animate(
+    [{ transform: `translateX(${dir * w + fromX}px)` }, { transform: 'translateX(0)' }],
+    { duration: ms, easing: EASE });
+  let done = false;
+  const finish = () => {
+    if (done) return;
+    done = true;
+    sliding = null;
+    try { a1.cancel(); a2.cancel(); } catch (_) {}
+    out.hidden = curView !== cur;
+    unfloat(out);
+  };
+  sliding = finish;
+  a2.onfinish = finish;
+  setTimeout(finish, ms + 120);   // กันกรณี onfinish ไม่มา (แท็บถูกพักกลางคัน)
+}
+
 function wireTabs() {
-  for (const v of VIEWS) $('tab' + v)?.addEventListener('click', () => show(v));
+  for (const v of VIEWS) {
+    $('tab' + v)?.addEventListener('click', () => {
+      const d = VIEWS.indexOf(v) - VIEWS.indexOf(currentView());
+      slideTo(v, Math.sign(d), 0, 260);
+    });
+  }
   document.addEventListener('keydown', (e) => {
     if (e.target?.matches?.('input,textarea,select')) return;
     if (e.key === 'ArrowLeft') ui.goDay?.(-1);
@@ -39,7 +95,7 @@ function wireTabs() {
    ไม่ทำงานเมื่อเริ่มปัดบน: ช่องที่กำลังพิมพ์อยู่ (โฟกัส) · ตัวเลื่อน/ดรอปดาวน์ · แถบที่เลื่อนแนวนอนได้ (จดด่วน) · ป๊อปอัป/ชีต
    ช่องพิมพ์ที่ยังไม่โฟกัสปัดผ่านได้ — หน้าจด/ตาชั่งเต็มไปด้วยช่องพิมพ์ ไม่งั้นแทบปัดออกจากหน้านั้นไม่ได้
    ต้องแนวนอนชัด ๆ (|dx| ≥ 60 px และ ≥ 1.5×|dy|) ไม่งั้นการเลื่อนจอขึ้นลงจะกลายเป็นเปลี่ยนหน้า */
-const SWIPE_MIN = 60;
+const SWIPE_MIN = 60;   // สะบัดเร็วใช้ครึ่งหนึ่งของระยะนี้
 const SWIPE_SKIP = 'select, input[type=range], [contenteditable], #estDetail, #foodSuggest, #quickSheet, .sheet, .est-pop-card';
 
 function scrollsSideways(node) {
@@ -53,11 +109,16 @@ function scrollsSideways(node) {
 }
 
 function currentView() {
-  return VIEWS.find((v) => $('view' + v) && !$('view' + v).hidden) || 'Day';
+  return curView;
 }
 
 function wireSwipe() {
-  let x0 = 0, y0 = 0, on = false;
+  // ลากตามนิ้ว: ล็อกทิศครั้งแรกที่ขยับเกิน 10 px · แนวนอน → หน้าเลื่อนตามนิ้ว (สุดขอบมีแรงต้าน)
+  // ปล่อยนิ้ว: ลากเกิน 1/4 จอ หรือสะบัดเร็ว → เปลี่ยนหน้า · ไม่งั้นเด้งกลับ
+  let x0 = 0, y0 = 0, t0 = 0, on = false, lock = '', dx = 0, sec = null, idx = 0;
+  let peek = null, peekDir = 0;   // หน้าข้าง ๆ ที่โผล่ตามนิ้วมา (ยังไม่วาดใหม่ — โชว์เนื้อหาล่าสุดที่มีอยู่)
+  const dropPeek = () => { if (peek) { unfloat(peek); peek.hidden = peek !== $('view' + curView); } peek = null; peekDir = 0; };
+  const DEAD = 10;
   document.addEventListener('touchstart', (e) => {
     on = false;
     if (e.touches.length !== 1) return;
@@ -67,23 +128,81 @@ function wireSwipe() {
     if (ae && ae.matches?.('input, textarea') && (ae === t || ae.contains?.(t))) return;
     // ป๊อปอัปเปิดค้างอยู่ (ทับทั้งจอ) → ไม่เปลี่ยนหน้า
     if (document.querySelector('.sheet:not([hidden]), #estDetail:not([hidden])')) return;
+    if (sliding) sliding();
     x0 = e.touches[0].clientX;
     y0 = e.touches[0].clientY;
-    on = true;
+    t0 = performance.now();
+    lock = '';
+    dx = 0;
+    idx = VIEWS.indexOf(currentView());
+    sec = $('view' + VIEWS[idx]);
+    on = !!sec;
   }, { passive: true });
-  document.addEventListener('touchend', (e) => {
+  document.addEventListener('touchmove', (e) => {
+    if (!on) return;
+    const mx = e.touches[0].clientX - x0, my = e.touches[0].clientY - y0;
+    if (!lock) {
+      if (Math.abs(mx) < DEAD && Math.abs(my) < DEAD) return;
+      lock = Math.abs(mx) > Math.abs(my) * 1.2 ? 'x' : 'y';
+      if (lock === 'y') { on = false; return; }
+      sec.style.willChange = 'transform';
+    }
+    e.preventDefault();   // ล็อกแนวนอนแล้ว ห้ามจอเลื่อนขึ้นลงตาม
+    const atEdge = (mx > 0 && idx === 0) || (mx < 0 && idx === VIEWS.length - 1);
+    dx = atEdge ? mx * 0.25 : mx;
+    sec.style.transform = `translateX(${dx}px)`;
+    const d = mx < 0 ? 1 : -1;
+    const n = VIEWS[idx + d];
+    if (d !== peekDir) {
+      dropPeek();
+      if (n) {
+        peek = $('view' + n);
+        peekDir = d;
+        // วางให้ตรงกับตำแหน่งหลังเปลี่ยนหน้า (หน้าใหม่เริ่มบนสุดเสมอ)
+        if (peek) { float(peek, sec.offsetTop + window.scrollY, sec); peek.style.willChange = 'transform'; }
+      }
+    }
+    if (peek) peek.style.transform = `translateX(${dx + peekDir * pageW()}px)`;
+  }, { passive: false });
+  const release = (cancel) => {
     if (!on) return;
     on = false;
-    const t = e.changedTouches[0];
-    const dx = t.clientX - x0, dy = t.clientY - y0;
-    if (Math.abs(dx) < SWIPE_MIN || Math.abs(dx) < Math.abs(dy) * 1.5) return;
+    if (lock !== 'x') return;
+    sec.style.willChange = '';
+    const w = window.innerWidth;
+    const v = dx / Math.max(1, performance.now() - t0);   // px/ms
     const dir = dx < 0 ? 1 : -1;
-    const i = VIEWS.indexOf(currentView()) + dir;
-    if (i < 0 || i >= VIEWS.length) return;
-    show(VIEWS[i], dir);
-    window.scrollTo(0, 0);
-  });
-  document.addEventListener('touchcancel', () => { on = false; });
+    const next = idx + dir;
+    const go = !cancel && next >= 0 && next < VIEWS.length
+      && (Math.abs(dx) > w * 0.25 || (Math.abs(dx) > SWIPE_MIN / 2 && Math.abs(v) > 0.45));
+    if (go && peekDir !== dir) dropPeek();
+    if (go) {
+      peek = null;
+      peekDir = 0;
+      // เวลาที่เหลือสั้นลงตามระยะที่ลากมาแล้ว — ลากมาไกล/สะบัดเร็ว หน้าใหม่ก็เข้าเร็ว
+      const ms = Math.round(Math.max(180, Math.min(320, 320 * (1 - Math.abs(dx) / w))));
+      slideTo(VIEWS[next], dir, dx, ms);
+      return;
+    }
+    const s0 = sec, from = dx, p0 = peek, pd = peekDir;
+    peek = null;
+    peekDir = 0;
+    s0.style.transform = '';
+    if (from && !reduceMotion()) {
+      s0.animate([{ transform: `translateX(${from}px)` }, { transform: 'translateX(0)' }], { duration: 220, easing: EASE });
+    }
+    if (p0) {
+      const end = () => { unfloat(p0); p0.hidden = p0 !== $('view' + curView); };
+      if (reduceMotion()) end();
+      else {
+        const a = p0.animate([{ transform: `translateX(${from + pd * pageW()}px)` }, { transform: `translateX(${pd * pageW()}px)` }],
+          { duration: 220, easing: EASE, fill: 'forwards' });
+        a.onfinish = () => { a.cancel(); end(); };
+      }
+    }
+  };
+  document.addEventListener('touchend', () => release(false));
+  document.addEventListener('touchcancel', () => release(true));
 }
 
 /* คิวส่ง: iOS ไม่มี Background Sync → ต้องสะกิดเองทุกจังหวะที่แอพได้กลับมาทำงาน */
