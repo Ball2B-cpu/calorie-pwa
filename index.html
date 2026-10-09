@@ -75,10 +75,10 @@
     <div class="card meter">
       <div class="ringwrap">
         <div class="ring" id="ring">
-          <svg width="150" height="150" viewBox="0 0 150 150" aria-hidden="true">
-            <circle class="rtrack" cx="75" cy="75" r="66"></circle>
-            <circle class="rfill" id="ringFill" cx="75" cy="75" r="66"
-                    stroke-dasharray="414.7" stroke-dashoffset="414.7"></circle>
+          <svg width="156" height="156" viewBox="0 0 156 156" aria-hidden="true">
+            <circle class="rtrack" cx="78" cy="78" r="70"></circle>
+            <circle class="rfill" id="ringFill" cx="78" cy="78" r="70"
+                    stroke-dasharray="439.8" stroke-dashoffset="439.8"></circle>
           </svg>
           <div class="ringtext">
             <div class="num" id="bignum">—<span class="unit">kcal</span></div>
@@ -90,24 +90,10 @@
             <div class="n" id="eaten">—</div>
             <div class="k">กินไปแล้ว จาก <span id="limit">—</span></div>
           </div>
-          <div class="protein">
-            <div class="prow">
-              <div class="t">โปรตีน</div>
-              <div class="v"><span id="pnow">—</span> / <span id="pgoal">—</span> g</div>
-            </div>
-            <div class="pbar"><div class="pfill" id="pfill"></div></div>
-            <div class="pnote" id="pnote"></div>
-          </div>
-          <div class="protein fiber">
-            <div class="prow">
-              <div class="t">ใยอาหาร</div>
-              <div class="v"><span id="fnow">—</span> / <span id="fgoal">—</span> g</div>
-            </div>
-            <div class="pbar"><div class="pfill fib" id="ffill"></div></div>
-            <div class="pnote" id="fnote"></div>
-          </div>
-          <button class="bodyline" id="toBody" type="button">
-            <span id="bodySummary">ตาชั่งเช้า · ยังไม่ชั่ง</span><span class="mono">›</span>
+          <div class="sidesep"></div>
+          <button class="bodystats" id="toBody" type="button" aria-label="ไปหน้าตาชั่ง">
+            <span class="bs"><span class="v" id="bsFat">—</span><span class="k">ไขมัน</span></span>
+            <span class="bs"><span class="v"><span id="bsMuscle">—</span> ›</span><span class="k" id="bsMuscleK">กล้าม</span></span>
           </button>
         </div>
       </div>
@@ -119,6 +105,32 @@
         <div class="tick-label" id="tickLimitLabel"></div>
         <div class="tick soft" id="tickTdee"></div>
         <div class="tick-label" id="tickTdeeLabel"></div>
+      </div>
+    </div>
+
+    <!-- โปรตีน · ใยอาหาร · น้ำ (ui.js วาดเลข · น้ำจดได้ตรงนี้เลย) -->
+    <div class="card nutri">
+      <div class="nrow">
+        <span class="t">โปรตีน</span>
+        <div class="pbar"><div class="pfill" id="pfill"></div></div>
+        <span class="v"><span id="pnow">—</span> <span class="of">/ <span id="pgoal">—</span> g</span></span>
+        <span class="pnote" id="pnote"></span>
+      </div>
+      <div class="nrow">
+        <span class="t">ใยอาหาร</span>
+        <div class="pbar"><div class="pfill fib" id="ffill"></div></div>
+        <span class="v"><span id="fnow">—</span> <span class="of">/ <span id="fgoal">—</span> g</span></span>
+        <span class="pnote" id="fnote"></span>
+      </div>
+      <div class="nrow water">
+        <span class="t">น้ำ</span>
+        <div class="pbar"><div class="pfill wat" id="wfill"></div></div>
+        <span class="v wv"><span id="wnow">—</span> <span class="of">/ <span id="wgoal">—</span> ml</span></span>
+        <span class="pnote" id="wnote"></span>
+        <span class="wbtns">
+          <button type="button" class="wminus" id="wUndo" aria-label="ลบน้ำแก้วล่าสุด">−</button>
+          <button type="button" class="wplus" id="wAdd" aria-label="เพิ่มน้ำ 250 ml">+250 ml</button>
+        </span>
       </div>
     </div>
 

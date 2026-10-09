@@ -7,7 +7,7 @@ import * as db from './db.js';
 import * as ui from './ui.js';
 
 const $ = (id) => document.getElementById(id);
-const CIRC = 2 * Math.PI * 66;                 // r=66 ในวงแหวน index.html
+const CIRC = 2 * Math.PI * 70;                 // r=70 ในวงแหวน index.html
 const DEFAULT_PROFILE = { limit: 1800, tdee: 2450, proteinGoal: 140, goalWeight: 87.5 };
 const DEFAULT_QUICK = ['quaker_oat', 'soymilk_mucho', 'pasco_chojuku', 'whey_reys_choco', 'egg', 'rice_scoop', 'chicken_boiled', 'veg_serve'];
 const PORTIONS = [0.5, 1, 1.5, 2];
@@ -86,16 +86,12 @@ export function afterDay(doc, info) {
 
   const b = (doc && doc.body) || {};
   const val = (v, suffix) => (typeof v === 'number' && Number.isFinite(v) ? v.toFixed(1) + suffix : null);
-  const bits = [];
   const fat = val(b.fat, '%');
   const muscle = val(b.muscle, '');
-  if (fat) bits.push('ไขมัน <b>' + fat + '</b>');
-  if (muscle) bits.push('กล้าม <b>' + muscle + '</b>');
-  const node = $('bodySummary');
-  if (node) {
-    if (bits.length) node.innerHTML = bits.join(' · ');          // ข้อความคงที่ของเราเอง ไม่ใช่ข้อมูลจาก AI
-    else node.textContent = 'ตาชั่งเช้า · ยังไม่ชั่ง';
-  }
+  const fatEl = $('bsFat'), musEl = $('bsMuscle'), musK = $('bsMuscleK');
+  if (fatEl) fatEl.textContent = fat || '—';
+  if (musEl) musEl.textContent = muscle || '—';
+  if (musK) musK.textContent = fat || muscle ? 'กล้าม' : 'ยังไม่ชั่ง';
   renderQuick();
 }
 

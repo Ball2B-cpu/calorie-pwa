@@ -18,6 +18,10 @@
   --over-wash:#F6EDE9;
   --protein:#55628F;
   --fiber:#5E8550;
+  --water:#2F6B9A;
+  --water-wash:#EEF4F9;
+  --water-line:#C9DAE8;
+  --water-ink:#1F4E74;
   --track:#E6E3DA;
   --zone:#EFECE4;
   --radius:16px;
@@ -40,6 +44,10 @@
     --over-wash:#281B17;
     --protein:#8792C4;
     --fiber:#8DB57E;
+    --water:#7FB0D8;
+    --water-wash:#18232C;
+    --water-line:#2B4253;
+    --water-ink:#A9CFEC;
     --track:#272B2E;
     --zone:#202427;
   }
@@ -60,6 +68,10 @@
   --over-wash:#281B17;
   --protein:#8792C4;
   --fiber:#8DB57E;
+  --water:#7FB0D8;
+  --water-wash:#18232C;
+  --water-line:#2B4253;
+  --water-ink:#A9CFEC;
   --track:#272B2E;
   --zone:#202427;
 }
@@ -165,45 +177,58 @@ button{font:inherit;color:inherit}
 
 /* ── หน้าแรก: วงแหวน “เหลือกินได้อีก” ──────────────── */
 .meter{padding:0;background:transparent;border:0;display:flex;flex-direction:column;gap:18px}
-.ringwrap{display:flex;align-items:center;gap:20px}
-.ring{position:relative;width:150px;height:150px;flex:none}
+.ringwrap{display:flex;align-items:center;gap:24px}
+.ring{position:relative;width:156px;height:156px;flex:none}
 .ring svg{display:block;transform:rotate(-90deg)}
-.ring .rtrack{fill:none;stroke:var(--track);stroke-width:11}
-.ring .rfill{fill:none;stroke:var(--eaten);stroke-width:11;stroke-linecap:round;transition:stroke-dashoffset .45s cubic-bezier(.2,.8,.2,1)}
+.ring .rtrack{fill:none;stroke:var(--track);stroke-width:12}
+.ring .rfill{fill:none;stroke:var(--eaten);stroke-width:12;stroke-linecap:round;transition:stroke-dashoffset .45s cubic-bezier(.2,.8,.2,1)}
 .ring.is-over .rfill{stroke:var(--over)}
 .ringtext{position:absolute;inset:0;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:3px;text-align:center}
 .ringtext .num{
-  font-family:"IBM Plex Mono",ui-monospace,monospace;font-size:38px;line-height:1;font-weight:600;
+  font-family:"IBM Plex Mono",ui-monospace,monospace;font-size:34px;line-height:1;font-weight:600;
   letter-spacing:-.04em;font-variant-numeric:tabular-nums;color:var(--eaten);
 }
 .ring.is-over .ringtext .num{color:var(--over)}
 /* ค่าประมาณมี "~" นำหน้า → กว้างเกินวง: ย่อเลขลงนิด + ย่อ "~" (ยังเห็นชัดว่าเป็นค่าประมาณ) */
-.ringtext .num:has(.est){font-size:33px}
+.ringtext .num:has(.est){font-size:30px}
 .ringtext .num .est::before{font-size:.7em;margin-right:1px}
 .ringtext .num .unit{display:none}
-.ringtext .label{font-size:11.5px;color:var(--muted)}
-.ringside{flex:1;min-width:0;display:flex;flex-direction:column;gap:16px}
+.ringtext .label{font-size:11px;color:var(--muted)}
+.ringside{flex:1;min-width:0;display:flex;flex-direction:column;gap:14px}
 .eaten-side{display:flex;flex-direction:column;gap:2px}
-.eaten-side .n{font-family:"IBM Plex Mono",ui-monospace,monospace;font-size:19px;font-weight:600;font-variant-numeric:tabular-nums}
-.eaten-side .k{font-size:11.5px;color:var(--muted)}
+.eaten-side .n{font-family:"IBM Plex Mono",ui-monospace,monospace;font-size:24px;font-weight:600;font-variant-numeric:tabular-nums}
+.eaten-side .k{font-size:12px;color:var(--muted)}
+.sidesep{height:1px;background:var(--line)}
+.bodystats{
+  display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:8px;
+  background:transparent;border:0;padding:0;text-align:left;cursor:pointer;color:var(--ink);font:inherit;
+}
+.bodystats .bs{display:flex;flex-direction:column;min-width:0}
+.bodystats .v{font-family:"IBM Plex Mono",ui-monospace,monospace;font-size:16px;font-weight:600;font-variant-numeric:tabular-nums;white-space:nowrap}
+.bodystats .k{font-size:11px;color:var(--faint)}
 
 /* เกจเส้นเดิมยังอยู่ใน DOM เพื่อให้ paintGauge ของ ui.js ทำงานได้ แต่ไม่ต้องแสดง */
 .gauge{display:none}
 
-.protein{display:flex;flex-direction:column;gap:6px;background:transparent;border:0;padding:0}
-.prow{display:flex;align-items:baseline;justify-content:space-between;gap:10px}
-.prow .t{font-size:12px;color:var(--muted)}
-.prow .v{font-family:"IBM Plex Mono",ui-monospace,monospace;font-size:12px;color:var(--muted);font-variant-numeric:tabular-nums}
+.nutri{padding:12px 14px;border-radius:14px;display:flex;flex-direction:column;gap:10px}
+.nrow{display:grid;grid-template-columns:56px minmax(0,1fr) auto;column-gap:10px;row-gap:2px;align-items:center}
+.nrow .t{font-size:13px;font-weight:500;white-space:nowrap}
+.nrow .v{font-family:"IBM Plex Mono",ui-monospace,monospace;font-size:12px;text-align:right;font-variant-numeric:tabular-nums;white-space:nowrap}
+.nrow .v .of{color:var(--muted)}
+.nrow .v.wv{color:var(--water)}
+.nrow .pnote{grid-column:2;font-size:10.5px;color:var(--faint)}
+.nrow.water .pnote{grid-column:2}
+.wbtns{grid-column:3;display:flex;gap:4px;justify-content:flex-end}
+.wbtns button{height:28px;border-radius:8px;font-family:inherit;font-size:11px;cursor:pointer;line-height:1}
+.wminus{width:28px;padding:0;border:1px solid var(--line);background:var(--card);color:var(--muted);font-size:14px !important}
+.wminus:disabled{opacity:.4;cursor:default}
+.wplus{padding:0 10px;border:1px solid var(--water-line);background:var(--water-wash);color:var(--water-ink);font-weight:500;white-space:nowrap}
+.wbtns button:active{transform:scale(.96)}
 .pbar{position:relative;height:6px;border-radius:3px;background:var(--track);overflow:hidden}
 .pfill{height:100%;background:var(--protein);border-radius:3px;transition:width .4s ease}
 .pfill.fib{background:var(--fiber)}
-.pnote{font-size:11.5px;color:var(--faint)}
+.pfill.wat{background:var(--water)}
 
-.bodyline{
-  display:flex;align-items:center;gap:8px;background:transparent;border:0;padding:0;
-  font-size:11.5px;color:var(--faint);cursor:pointer;text-align:left;white-space:nowrap;
-}
-.bodyline b{font-family:"IBM Plex Mono",ui-monospace,monospace;font-weight:500;color:var(--muted)}
 
 /* ── แถบจดด่วน ──────────────────────────────────────── */
 .quick{display:flex;flex-direction:column;gap:10px}
@@ -262,20 +287,24 @@ button{font:inherit;color:inherit}
 /* ── รายการมื้อ (ui.js วาด) ─────────────────────────── */
 .meals{padding:0;background:transparent;border:0;display:flex;flex-direction:column}
 .meal{
-  -webkit-appearance:none;appearance:none;
-  display:flex;align-items:center;gap:12px;padding:14px 0;width:100%;
+  -webkit-appearance:none;appearance:none;font:inherit;color:inherit;
+  display:flex;flex-direction:column;gap:4px;padding:14px 0;width:100%;
   border:0;border-top:1px solid var(--line);background:transparent;text-align:left;cursor:pointer;
 }
+.mrow{display:flex;align-items:baseline;justify-content:space-between;gap:8px;min-width:0}
+.mkcal{font-family:"IBM Plex Mono",ui-monospace,monospace;font-size:14px;font-variant-numeric:tabular-nums;white-space:nowrap}
+.mkcal b{font-weight:600;color:var(--ink)}
+.mkcal .u{color:var(--muted)}
+.mkcal .chev{display:inline-block;margin-left:6px}
+.mrow.sub{font-size:11px;color:var(--faint)}
+.msub{flex:1;min-width:0;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
 .meal:first-child{border-top:0}
-.chev{flex:none;color:var(--faint);font-size:10px;line-height:1;transition:transform .15s ease}
+.chev{flex:none;color:var(--faint);font-size:11px;line-height:1;transition:transform .15s ease}
 @media (prefers-reduced-motion:reduce){.chev{transition:none}}
 .meal[aria-expanded="true"] .chev{transform:rotate(90deg)}
 .swatch{display:none}
-.mname{font-size:14px;font-weight:600;flex:1;min-width:0}
-.mname span{display:block;font-size:11.5px;font-weight:400;color:var(--faint);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
-.mnums{font-family:"IBM Plex Mono",ui-monospace,monospace;font-size:13px;font-variant-numeric:tabular-nums;text-align:right;flex:none;color:var(--muted)}
-.mnums b{font-weight:600;color:var(--ink)}
-.mnums > span{display:block;font-size:10.5px;color:var(--faint)}
+.mname{font-size:15px;font-weight:700;min-width:0}
+.mnums{font-family:"IBM Plex Mono",ui-monospace,monospace;font-size:11px;font-variant-numeric:tabular-nums;white-space:nowrap;flex:none;color:var(--faint)}
 .items{padding:0 0 12px;display:flex;flex-direction:column;gap:6px}
 .items[hidden]{display:none}
 .item{display:flex;align-items:baseline;justify-content:space-between;gap:10px;font-size:12px;color:var(--muted)}

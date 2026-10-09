@@ -131,6 +131,7 @@ function canWrite(as, path) {
   if (p === 'rev' || p === 'updatedAt' || p === 'updatedBy' || p === 'history' || p === 'state' || p === 'conflicts'
     || p.startsWith('history.') || p.startsWith('conflicts.')) return true;
   if (p === 'body' || p.startsWith('body.')
+    || p === 'water' || p.startsWith('water.')
     || p === 'note' || p === 'savedAt' || p === 'submitted' || p === 'submittedAt'
     || /^meals\[\]\.(raw|time|photos|key|outside|deleted)$/.test(p)
     || /^meals\[\]\.(raw|time|photos|key|outside|deleted)\./.test(p)) return as === 'app';
@@ -465,6 +466,9 @@ export function mergeDay(remote, local, as) {
     updatedBy: as,
     state: pickScalar(r, local, 'state', as, acc),
     body: mergeOwnedMap(r.body, local.body, 'body', as, acc, as === 'app'),
+    // น้ำดื่ม (เพิ่ม 9 ต.ค.) — ใส่ key เฉพาะวันที่มีฝั่งใดฝั่งหนึ่งจดแล้ว ไฟล์เก่าจะได้ไม่มี water:null งอกทุกไฟล์
+    ...(r.water != null || local.water != null
+      ? { water: mergeOwnedMap(r.water, local.water, 'water', as, acc, as === 'app') } : {}),
     garmin: mergeOwnedMap(r.garmin, local.garmin, 'garmin', as, acc, as === 'claude'),
     meals: mergeMeals(r.meals, local.meals, as, acc),
     note: pickScalar(r, local, 'note', as, acc),

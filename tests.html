@@ -588,6 +588,21 @@ test('ใยอาหาร: ตาราง/ฉลากในรูปคิ�
   assert(net.sumMealEst([{ est: { kcal: 1, p: 1 } }]).fib === null, 'ไม่มีมื้อไหนมี fib = null');
 });
 
+test('น้ำดื่ม water.log: แอพเท่านั้นที่เขียนได้ · วันที่ไม่มีน้ำไม่งอก key · sync ไม่ทำหาย (เพิ่ม 9 ต.ค.)', () => {
+  const log = [{ at: '09:00', ml: 250 }, { at: '10:00', ml: 250 }];
+  const remote = baseDay({ rev: 3, meals: [{ id: 'm_a', key: 'เช้า', raw: ['ไข่'] }] });
+  const app = db.mergeDay(remote, { schema: 2, date: remote.date, water: { log } }, 'app');
+  assert(deepEqual(app.water, { log }) && app.meals.length === 1, 'แอพจดน้ำแล้วมื้อเดิมต้องอยู่ครบ');
+  const cl = db.mergeDay(app, { ...app, water: { log: [] } }, 'claude');
+  assert(deepEqual(cl.water, { log }), 'claude ห้ามแก้ water');
+  const none = db.mergeDay(remote, { schema: 2, date: remote.date, note: 'x' }, 'app');
+  assert(!('water' in none), 'วันที่ไม่มีใครจดน้ำ ต้องไม่มี key water');
+  const pushed = net.syncMerge(baseDay({ rev: 9 }), app);
+  assert(deepEqual(pushed.water, { log }), 'ดันขึ้น repo ที่ยังไม่มีน้ำ ต้องได้ water ไปด้วย');
+  const pulled = net.syncMerge(pushed, app);
+  assert(net.sameContent(pulled, { ...pushed }) && deepEqual(pulled.water, { log }), 'ดึงกลับต้องเหมือนเดิม');
+});
+
 test('pull ซ้ำ: เนื้อหาเท่าเดิมไม่นับว่าเปลี่ยน แต่ final ใหม่ต้องนับ', () => {
   const remote = baseDay({ rev: 8, meals: [{ id: 'm1', raw: ['ข้าว'], est: { kcal: 433 }, final: { kcal: 531 } }] });
   const local = baseDay({ rev: 7, meals: [{ id: 'm1', raw: ['ข้าว'], est: { kcal: 433 } }] });

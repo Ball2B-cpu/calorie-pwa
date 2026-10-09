@@ -30,7 +30,7 @@ const STATE_LABEL = {
   error: 'ส่งไม่สำเร็จ',
   synced: 'ส่งครบแล้ว',
 };
-const DEFAULT_PROFILE = { limit: 1800, tdee: 2450, proteinGoal: 140, fiberGoal: 25, goalWeight: 87.5 };
+const DEFAULT_PROFILE = { limit: 1800, tdee: 2450, proteinGoal: 140, fiberGoal: 25, waterGoal: 3000, goalWeight: 87.5 };
 
 let foodsCatalog = null;
 let curDate = '';
@@ -61,6 +61,7 @@ function profile() {
       tdee: num(o.tdee) ?? DEFAULT_PROFILE.tdee,
       proteinGoal: num(o.proteinGoal) ?? DEFAULT_PROFILE.proteinGoal,
       fiberGoal: num(o.fiberGoal) ?? DEFAULT_PROFILE.fiberGoal,
+      waterGoal: num(o.waterGoal) ?? DEFAULT_PROFILE.waterGoal,
       goalWeight: num(o.goalWeight) ?? DEFAULT_PROFILE.goalWeight,
     };
   } catch (_) {
@@ -510,37 +511,35 @@ function paintMeals(d) {
     row.type = 'button';
     row.setAttribute('aria-expanded', 'false');
 
-    const swatch = el('span', 'swatch');
-    swatch.style.background = SHADES[k % SHADES.length];
-
+    // 2 บรรทัด (ดีไซน์ 9 ต.ค.): ชื่อมื้อ | kcal ▸  ·  เวลา·รายการ | P · F
+    const top = el('span', 'mrow');
     const mname = el('span', 'mname', m.key || '');
-    const sub = el('span');
-    sub.textContent = mealSub(m);
-    mname.appendChild(sub);
-
-    const mnums = el('span', 'mnums');
+    const kc = el('span', 'mkcal');
     const kb = el('b');
     // ยังไม่มีเลขจาก AI/Claude เลย → โชว์ "—" ไม่ใช่ 0 (0 ดูเหมือนคิดแล้วว่าไม่มีแคล)
     const noNum = !layer(m.final) && !layer(m.est) && !(m.items || []).some((it) => itemNums(it));
     kb.textContent = noNum ? '—' : fmt(nums.kcal);
     markEst(kb, nums.est, true);
-    mnums.append(kb, document.createTextNode(' kcal'));
-    const pline = el('span');
-    pline.append(document.createTextNode('P '));
+    kc.append(kb, el('span', 'u', ' kcal'), el('span', 'chev', '▸'));
+    top.append(mname, kc);
+
+    const bot = el('span', 'mrow sub');
+    bot.appendChild(el('span', 'msub', mealSub(m)));
+    const mnums = el('span', 'mnums');
+    mnums.append(document.createTextNode('P '));
     const pb = el('span');
     pb.textContent = noNum ? '—' : fmtP(nums.p);
     markEst(pb, nums.est, true);
-    pline.append(pb, document.createTextNode(' g'));
+    mnums.append(pb, document.createTextNode(' g'));
     if (nums.fib != null) {
-      pline.append(document.createTextNode(' · F '));
+      mnums.append(document.createTextNode(' · F '));
       const fb = el('span');
       fb.textContent = fmtP(nums.fib);
       markEst(fb, nums.est, true);
-      pline.append(fb, document.createTextNode(' g'));
+      mnums.append(fb, document.createTextNode(' g'));
     }
-    mnums.appendChild(pline);
-
-    row.append(swatch, mname, mnums, el('span', 'chev', '▶'));
+    bot.appendChild(mnums);
+    row.append(top, bot);
 
     const list = el('div', 'items');
     list.hidden = true;
@@ -624,7 +623,7 @@ async function paintDay() {
   const w = bodyNum(d, 'weight');
 
   setText($('weight'), w != null ? w.toFixed(1) + ' กก.' : 'ไม่ได้ชั่ง');
-  setText($('biglabel'), left >= 0 ? (d && d.closed ? 'ต่ำกว่างบ' : 'เหลือวันนี้') : 'เกินลิมิตแล้ว');
+  setText($('biglabel'), left >= 0 ? (d && d.closed ? 'kcal ต่ำกว่างบ' : 'kcal เหลือวันนี้') : 'kcal เกินลิมิต');
   fillBignum(left, eaten.est, left < 0);
 
   const eatenEl = $('eaten');
@@ -661,6 +660,8 @@ async function paintDay() {
     : (fleft > 0 ? 'ขาดอีก ' + fmtP(fleft) + ' g ≈ บรอกโคลี ' + Math.max(10, Math.round(fleft / 4.4 * 10) * 10) + ' g' : 'ถึงเป้าแล้ว'))
     + (fiber.missing ? ' · ' + fiber.missing + ' มื้อยังไม่มีเลข' : ''));
 
+  paintWater(d);
+
   setDayState(d);
   paintMeals(d);
   hideEstDetail();
@@ -669,6 +670,56 @@ async function paintDay() {
     if (gen !== dayGen) return;
     console.warn('[ui] renderDay failed');
   }
+}
+
+/* ── น้ำดื่ม: day.water.log = [{at:'HH:MM', ml}] · แอพเป็นเจ้าของ (SCHEMA.md) ── */
+const GLASS_ML = 250;
+
+function waterLog(d) {
+  const log = d && d.water && Array.isArray(d.water.log) ? d.water.log : [];
+  return log.filter((x) => x && Number(x.ml) > 0);
+}
+
+function paintWater(d) {
+  const p = profile();
+  const drunk = waterLog(d).reduce((a, x) => a + Number(x.ml), 0);
+  const left = Math.max(p.waterGoal - drunk, 0);
+  setText($('wnow'), drunk.toLocaleString('en-US'));
+  setText($('wgoal'), p.waterGoal.toLocaleString('en-US'));
+  const fill = $('wfill');
+  if (fill) fill.style.width = Math.min(100, (drunk / p.waterGoal) * 100) + '%';
+  setText($('wnote'), left > 0
+    ? 'ขาดอีก ' + left.toLocaleString('en-US') + ' ml ≈ ' + Math.ceil(left / GLASS_ML) + ' แก้ว'
+    : 'ครบเป้าแล้ว');
+  const undo = $('wUndo');
+  if (undo) undo.disabled = !drunk;
+}
+
+let waterChain = Promise.resolve();
+/** +ml / ลบแก้วล่าสุด (ml = -1) ของวันที่กำลังดู → บันทึก + ส่งขึ้น GitHub (ไม่ต้องรอกดคำนวณ) */
+function changeWater(ml) {
+  const date = curDate || todayISO();
+  const job = waterChain.then(async () => {
+    let existing = null;
+    try { existing = await db.getDay(date); } catch (_) { existing = null; }
+    const log = waterLog(existing).slice();
+    if (ml > 0) {
+      const t = new Date();
+      log.push({ at: String(t.getHours()).padStart(2, '0') + ':' + String(t.getMinutes()).padStart(2, '0'), ml });
+    } else if (log.length) {
+      log.pop();
+    } else return;
+    const merged = db.mergeDay(existing, { schema: 2, date, water: { log } }, 'app');
+    const saved = await db.putDay(merged);
+    if (curDate === date || (!curDate && date === todayISO())) paintWater(saved);
+    // กดรัว ๆ ไม่ต้องเข้าคิวซ้ำ — งาน gh-day ตัวเดียวดันสถานะล่าสุดของวันขึ้นไปทั้งก้อนอยู่แล้ว
+    let queued = [];
+    try { queued = await db.listOutbox(); } catch (_) { queued = []; }
+    if (!queued.some((j) => j && j.kind === 'gh-day' && j.date === date)) await db.enqueue({ kind: 'gh-day', date });
+    net.flush('water').catch(() => {});
+  });
+  waterChain = job.catch((e) => console.warn('[water]', e));
+  return job;
 }
 
 function setSum(node, main, small, cls) {
@@ -914,6 +965,8 @@ function wire() {
   $('sResetCache')?.addEventListener('click', resetCacheAndReload);
 
   $('prevDay')?.addEventListener('click', () => goDay(-1));
+  $('wAdd')?.addEventListener('click', () => changeWater(GLASS_ML));
+  $('wUndo')?.addEventListener('click', () => changeWater(-1));
   $('nextDay')?.addEventListener('click', () => goDay(1));
   $('backToday')?.addEventListener('click', () => {
     curDate = todayISO();

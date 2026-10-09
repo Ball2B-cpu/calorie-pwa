@@ -36,6 +36,10 @@
     "waist": 104.5                 // รอบเอว ซม. — วัดสัปดาห์ละครั้ง ไม่ต้องกรอกทุกวัน
   },
 
+  "water": {                       // 👤 แอพเท่านั้น — น้ำดื่ม (เพิ่ม 9 ต.ค. 2026 · ไม่มี key = ยังไม่ได้จด)
+    "log": [{ "at": "09:05", "ml": 250 }]   // ปุ่ม +250 ml เพิ่มท้าย · ปุ่ม − ลบตัวท้าย · ยอด = Σml
+  },
+
   "garmin": {                      // 🤖 Claude เท่านั้น (ดึงจาก Garmin ผ่าน Chrome — แอพทำแทนไม่ได้)
     "burn": 2520, "rest": 2276, "active": 244, "steps": 8123,
     "sleepScore": 78, "sleepHours": 6.5, "at": "2026-09-12T07:30:00+09:00"
@@ -88,7 +92,7 @@
 
 | path | แอพ | AI | Claude |
 |---|---|---|---|
-| `body.*` · `note` · `savedAt` · `submitted` · `submittedAt` · `meals[].raw/time/photos/key/outside` | ✍️ | — | — |
+| `body.*` · `water.*` · `note` · `savedAt` · `submitted` · `submittedAt` · `meals[].raw/time/photos/key/outside` | ✍️ | — | — |
 | `meals[].items[].est` · `meals[].est` · `totals.est` · `ai.*` · `meals[].items[].name` | — | ✍️ | ✍️ |
 | `meals[].items[].final` · `meals[].final` · `totals.final` · `meals[].comment` · `garmin` · `review` · `closed` | — | — | ✍️ |
 | `rev` · `updatedAt` · `updatedBy` · `history` · `state` · `conflicts` | ✍️ | ✍️ | ✍️ |
@@ -128,7 +132,7 @@
 
 ## ค่าตั้งต้น — `profile.json` (อยู่ใน repo ส่วนตัว ไม่ใช่ repo โค้ด)
 ```json
-{ "limit": 1800, "tdee": 2450, "proteinGoal": 140, "fiberGoal": 25, "goalWeight": 87.5 }
+{ "limit": 1800, "tdee": 2450, "proteinGoal": 140, "fiberGoal": 25, "waterGoal": 3000, "goalWeight": 87.5 }
 ```
 เพดานตัดสินสีของวัน: `ceil = min(tdee, garmin.burn ?? tdee)` (เอาค่าที่เข้มกว่าเสมอ)
 
