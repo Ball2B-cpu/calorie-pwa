@@ -158,15 +158,16 @@
    "id": "gari",
    "name": "ขิงดอง がり CGC",
    "unit": "1 ถุง = 50 g",
-   "kcal": 10,
+   "kcal": 22,
    "p": 0.1,
+   "fib": 0.8,
    "src": "label",
    "alias": [
     "ขิงดอง",
     "がり"
    ],
    "g": 50,
-   "salt": 1.1
+   "salt": 1.5
   },
   {
    "id": "tamagoyaki_echigo_6",
