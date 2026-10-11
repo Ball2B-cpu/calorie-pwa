@@ -603,6 +603,118 @@ test('น้ำดื่ม water.log: แอพเท่านั้นที�
   assert(net.sameContent(pulled, { ...pushed }) && deepEqual(pulled.water, { log }), 'ดึงกลับต้องเหมือนเดิม');
 });
 
+/* น้ำดื่มกดรัวระหว่าง pushDay รอ network (บั๊ก 11 ต.ค.: กด +250 สามครั้ง เหลือแก้วเดียวทั้งในเครื่องและบน repo) */
+async function tapWater(date, ml) {   // ตรรกะเดียวกับ changeWater ใน ui.js
+  const ex = await db.getDay(date);
+  const log = ((ex && ex.water && ex.water.log) || []).filter((x) => x && Number(x.ml) > 0);
+  if (ml > 0) log.push({ at: '12:' + String(10 + log.length), ml });
+  else log.pop();
+  await db.putDay(db.mergeDay(ex, { schema: 2, date, water: { log } }, 'app'));
+}
+async function dropGhDayJobs(date) {
+  for (const j of await db.listOutbox()) if (j.kind === 'gh-day' && j.date === date) await db.completeJob(j.id);
+}
+async function racePush(date, curId, remote, during) {
+  const puts = [];
+  let first = true;
+  await withStubFetch(async (url, opts = {}) => {
+    const method = String((opts && opts.method) || 'GET').toUpperCase();
+    if (method === 'GET') {
+      if (first && during) { first = false; await during(); }
+      return remote
+        ? jsonRes({ sha: 'sha-r', encoding: 'base64', content: net.utf8ToBase64(JSON.stringify(remote)) }, 200)
+        : jsonRes({ message: 'Not Found' }, 404);
+    }
+    if (method === 'PUT') {
+      puts.push(JSON.parse(net.base64ToUtf8(JSON.parse(opts.body).content)));
+      return jsonRes({ content: { path: 'days/' + date + '.json' }, commit: { sha: 'x' } }, 201);
+    }
+    throw new Error('fetch method ไม่คาดคิด: ' + method);
+  }, async () => { await net.pushDay(date, curId); });
+  return puts;
+}
+const glasses = (d) => ((d && d.water && d.water.log) || []).length;
+const waterConflict = (d) => ((d && d.conflicts) || []).some((c) => String(c.path).startsWith('water'));
+
+test('น้ำดื่มกดรัวระหว่าง pushDay: snapshot 1 แก้ว · ระหว่างรอเพิ่มเป็น 3 → ในเครื่องยัง 3 + เข้าคิวดันรอบต่อ (บั๊ก 11 ต.ค.)', async () => {
+  await db.open();
+  const date = '1999-03-10';
+  const hold = lsHold(['cal.gh_pat', 'cal.gh_repo']);
+  localStorage.setItem('cal.gh_pat', 'dummy-pat-not-real-xxxxxx');
+  localStorage.setItem('cal.gh_repo', 'owner/cal-test-data');
+  await dropGhDayJobs(date);
+  try {
+    await db.putDay(baseDay({ date }));
+    await tapWater(date, 250);
+    const curId = await db.enqueue({ kind: 'gh-day', date });   // งานที่ flushOnce กำลังทำ
+    const remote = baseDay({ date, rev: 5, meals: [{ id: 'm_r', key: 'เช้า', raw: ['ข้าว'], final: { kcal: 300 } }] });
+    const puts = await racePush(date, curId, remote, async () => { await tapWater(date, 250); await tapWater(date, 250); });
+    assert(puts.length === 1 && glasses(puts[0]) === 1, `รอบแรกดัน snapshot 1 แก้ว ได้ ${puts.map(glasses)}`);
+    const local = await db.getDay(date);
+    assert(glasses(local) === 3, `ในเครื่องต้องยัง 3 แก้ว ได้ ${glasses(local)}`);
+    assert(!waterConflict(local), 'ห้ามตกเป็น conflict ของ water');
+    assert(local.meals.some((m) => m.id === 'm_r' && m.final && m.final.kcal === 300), 'ของจาก remote (final ของ Claude) ต้องเข้ามาด้วย');
+    const follow = (await db.listOutbox()).filter((j) => j.kind === 'gh-day' && j.date === date && j.id !== curId);
+    assert(follow.length === 1, `ต้องมีงาน gh-day รอบต่อ 1 งาน ได้ ${follow.length}`);
+    await db.completeJob(curId);   // flushOnce ลบงานเดิม — งานรอบต่อต้องยังอยู่
+    assert((await db.listOutbox()).some((j) => j.id === follow[0].id), 'ลบงานเดิมแล้วงานรอบต่อต้องไม่หาย');
+
+    // รอบต่อ: repo = ที่ดันรอบแรก → ต้องได้ 3 แก้วขึ้นไป ไม่เข้าคิวเพิ่มอีก
+    const puts2 = await racePush(date, follow[0].id, puts[0], null);
+    assert(puts2.length === 1 && glasses(puts2[0]) === 3, `รอบต่อต้องดัน 3 แก้ว ได้ ${puts2.map(glasses)}`);
+    assert(!waterConflict(puts2[0]), 'รอบต่อห้ามมี conflict ของ water');
+    assert(glasses(await db.getDay(date)) === 3, 'หลังรอบต่อในเครื่องยัง 3 แก้ว');
+    const more = (await db.listOutbox()).filter((j) => j.kind === 'gh-day' && j.date === date && j.id !== follow[0].id);
+    assert(more.length === 0, `ไม่มีอะไรเปลี่ยนระหว่างรอบต่อ ห้ามเข้าคิวเพิ่ม ได้ ${more.length}`);
+  } finally {
+    await dropGhDayJobs(date);
+    hold.restore();
+  }
+});
+
+test('ลบแก้วล่าสุดระหว่าง pushDay: snapshot 2 แก้ว · ระหว่างรอลบเหลือ 1 → ไม่ฟื้นแก้วที่ลบ ทั้งในเครื่องและรอบต่อ', async () => {
+  await db.open();
+  const date = '1999-03-11';
+  const hold = lsHold(['cal.gh_pat', 'cal.gh_repo']);
+  localStorage.setItem('cal.gh_pat', 'dummy-pat-not-real-xxxxxx');
+  localStorage.setItem('cal.gh_repo', 'owner/cal-test-data');
+  await dropGhDayJobs(date);
+  try {
+    await db.putDay(baseDay({ date }));
+    await tapWater(date, 250);
+    await tapWater(date, 250);
+    const curId = await db.enqueue({ kind: 'gh-day', date });
+    const puts = await racePush(date, curId, null, async () => { await tapWater(date, -1); });
+    assert(glasses(puts[0]) === 2, `รอบแรกดัน snapshot 2 แก้ว ได้ ${glasses(puts[0])}`);
+    const local = await db.getDay(date);
+    assert(glasses(local) === 1 && !waterConflict(local), `ในเครื่องต้องเหลือ 1 แก้ว ได้ ${glasses(local)}`);
+    const follow = (await db.listOutbox()).filter((j) => j.kind === 'gh-day' && j.date === date && j.id !== curId);
+    assert(follow.length === 1, `ต้องมีงานรอบต่อ ได้ ${follow.length}`);
+    const puts2 = await racePush(date, follow[0].id, puts[0], null);
+    assert(glasses(puts2[0]) === 1 && !waterConflict(puts2[0]), `รอบต่อต้องดัน 1 แก้ว (ไม่ฟื้น) ได้ ${glasses(puts2[0])}`);
+    assert(glasses(await db.getDay(date)) === 1, 'หลังรอบต่อในเครื่องยัง 1 แก้ว');
+  } finally {
+    await dropGhDayJobs(date);
+    hold.restore();
+  }
+});
+
+test('rebaseLocal: เอาเฉพาะที่เครื่องเปลี่ยนระหว่างรอ — ช่องที่ไม่ได้แตะคงค่าของ merged · final ของ Claude ไม่ถูกทับ', () => {
+  const snap = baseDay({ rev: 2, note: 'เดิม', body: { weight: 90 }, meals: [{ id: 'm1', key: 'เช้า', raw: ['ไข่'] }] });
+  const merged = baseDay({ rev: 6, note: 'จากเครื่องอื่น', body: { weight: 90, fat: 25 },
+    meals: [{ id: 'm1', key: 'เช้า', raw: ['ไข่'], final: { kcal: 150 } }],
+    history: [{ at: '2026-10-11T10:00:00+09:00', by: 'app', fields: ['note'], rev: 6 }] });
+  const latest = { ...snap, rev: 3, water: { log: [{ at: '12:00', ml: 250 }] }, meals: [{ id: 'm1', key: 'เช้า', raw: ['ไข่', 'นม'] }],
+    history: [{ at: '2026-10-11T10:00:01+09:00', by: 'app', fields: ['water.log'], rev: 3 }] };
+  deepFreeze(snap); deepFreeze(merged); deepFreeze(latest);
+  const out = net.rebaseLocal(merged, snap, latest);
+  assert(out.note === 'จากเครื่องอื่น', `note ที่เครื่องไม่ได้แตะต้องคงของ merged ได้ ${out.note}`);
+  assert(out.body.weight === 90 && out.body.fat === 25, 'body ของ merged ต้องอยู่ครบ');
+  assert(glasses(out) === 1, 'น้ำที่เพิ่งกดต้องเข้ามา');
+  assert(deepEqual(out.meals[0].raw, ['ไข่', 'นม']) && out.meals[0].final.kcal === 150, 'raw ใหม่เข้า · final คงเดิม');
+  assert(out.rev === 7 && !(out.conflicts || []).length, `rev ${out.rev} ต้อง = 7 และไม่มี conflict`);
+});
+
 test('pull ซ้ำ: เนื้อหาเท่าเดิมไม่นับว่าเปลี่ยน แต่ final ใหม่ต้องนับ', () => {
   const remote = baseDay({ rev: 8, meals: [{ id: 'm1', raw: ['ข้าว'], est: { kcal: 433 }, final: { kcal: 531 } }] });
   const local = baseDay({ rev: 7, meals: [{ id: 'm1', raw: ['ข้าว'], est: { kcal: 433 } }] });

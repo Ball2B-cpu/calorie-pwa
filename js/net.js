@@ -140,6 +140,7 @@ class NetError extends Error {
 
 let flushing = false;
 let flushJob = null;
+let flushAgain = false;   // pushDay ขอรอบต่อ (เครื่องเปลี่ยนระหว่างดัน) — flush ที่เรียกระหว่างรอบค้างถูกกลืนไป ต้องวนเอง
 let lastGhWriteAt = 0;
 let foodsCache = null;
 
@@ -925,8 +926,64 @@ async function assertPhotosUploaded(date) {
   }
 }
 
-/** ดัน/ดึงข้อมูลกับ repo ส่วนตัว */
-export async function pushDay(date) {
+const DELTA_KEYS = ['state', 'body', 'water', 'note', 'ai', 'totals', 'savedAt', 'submitted', 'submittedAt'];
+const DELTA_MEAL_KEYS = ['raw', 'time', 'photos', 'key', 'outside', 'deleted', 'est', 'items'];
+
+function plainObj(v) {
+  return !!v && typeof v === 'object' && !Array.isArray(v);
+}
+
+/** ของที่เครื่องเปลี่ยนระหว่างรอ network (snap → latest) รวมทับผลที่เพิ่ง push (merged)
+ *  11 ต.ค.: กด +น้ำ รัว ๆ เหลือแก้วเดียว — pushDay เขียน merged (สร้างจาก snapshot ก่อน GET) ทับแก้วที่ 2–3
+ *  - ส่งเฉพาะ path ที่ snap→latest เปลี่ยนจริง (path อื่นที่ remote ชนะไปแล้วใน merged ห้ามถูก latest ค่าเก่าทับกลับ)
+ *  - history = ของ merged + รายการใหม่ของ latest → resolveOwned เห็นว่า local มาทีหลัง ไม่ตกเป็น conflict
+ *    (syncMerge(merged, latest) ตรง ๆ: entry ของรอบ push แตะ water.log แต่ latest ไม่มี → conflict แล้วคงของ merged = แก้วหาย)
+ *  - array (water.log, raw, photos) แทนทั้งก้อน → ลบแก้วระหว่างดันก็ไม่ฟื้น */
+export function rebaseLocal(merged, snap, latest) {
+  const same = (a, b) => canon(a) === canon(b);
+  const has = (o, k) => !!o && Object.prototype.hasOwnProperty.call(o, k);
+  const keyOf = (e) => `${e && e.rev}|${e && e.by}|${e && e.at}`;
+  const mH = Array.isArray(merged.history) ? merged.history : [];
+  const seen = new Set(mH.map(keyOf));
+  const patch = {
+    schema: latest.schema ?? merged.schema,
+    date: latest.date || merged.date,
+    rev: latest.rev,
+    conflicts: Array.isArray(latest.conflicts) ? latest.conflicts : [],
+    history: [...mH, ...(Array.isArray(latest.history) ? latest.history : []).filter((e) => !seen.has(keyOf(e)))],
+  };
+  for (const k of DELTA_KEYS) {
+    if (!has(latest, k) || same(latest[k], snap[k])) continue;
+    if (plainObj(latest[k]) && plainObj(snap[k])) {
+      const sub = {};
+      for (const sk of Object.keys(latest[k])) {
+        if (!same(latest[k][sk], snap[k][sk])) sub[sk] = latest[k][sk];
+      }
+      if (Object.keys(sub).length) patch[k] = sub;
+    } else {
+      patch[k] = latest[k];
+    }
+  }
+  const snapMeals = new Map((Array.isArray(snap.meals) ? snap.meals : [])
+    .filter((m) => m && m.id != null).map((m) => [m.id, m]));
+  const meals = [];
+  for (const lm of Array.isArray(latest.meals) ? latest.meals : []) {
+    if (!lm || lm.id == null) continue;
+    const sm = snapMeals.get(lm.id);
+    if (!sm) { meals.push(lm); continue; }
+    const pm = { id: lm.id };
+    for (const f of DELTA_MEAL_KEYS) {
+      if (has(lm, f) && !same(lm[f], sm[f])) pm[f] = lm[f];
+    }
+    if (Object.keys(pm).length > 1) meals.push(pm);
+  }
+  if (meals.length) patch.meals = meals;
+  return syncMerge(merged, patch);
+}
+
+/** ดัน/ดึงข้อมูลกับ repo ส่วนตัว
+ *  jobId = งาน gh-day ที่กำลังทำ (flushOnce ลบทิ้งหลังจบ) — ใช้เช็คว่ามีงานรอบถัดไปของวันนี้รออยู่แล้วหรือยัง */
+export async function pushDay(date, jobId) {
   const pat = ghPat();
   const repo = ghRepo();
   if (!pat || !repo) return null;
@@ -953,8 +1010,18 @@ export async function pushDay(date) {
     if (remoteFile && remoteFile.sha) body.sha = remoteFile.sha;
     const { res, text } = await ghPut(repo, pat, path, body);
     if (res.ok) {
-      await db.putDay(merged);
-      return merged;
+      // ระหว่างรอ GET/PUT เครื่องอาจเปลี่ยนไปแล้ว (กด +น้ำ / ลบแก้ว) → ห้ามเขียน merged ทับตรง ๆ
+      const latest = await db.getDay(date);
+      if (!latest || sameContent(latest, local)) return db.putDay(merged);
+      const saved = await db.putDay(rebaseLocal(merged, local, latest));
+      // ส่วนที่เพิ่งเปลี่ยนยังไม่ขึ้น repo — งานนี้ถูกลบหลังจบ (ui ไม่เข้าคิวซ้ำเพราะเห็นงานนี้ค้างอยู่) ต้องเข้าคิวรอบใหม่เอง
+      let queued = [];
+      try { queued = await db.listOutbox(); } catch (_) { queued = []; }
+      if (!queued.some((j) => j && j.kind === 'gh-day' && j.date === date && j.id !== jobId)) {
+        await db.enqueue({ kind: 'gh-day', date });
+      }
+      flushAgain = true;
+      return saved;
     }
     if (res.status === 409 || res.status === 422) {
       lastErr = new NetError(`GitHub ชนกัน (${res.status})`, { status: res.status });
@@ -1144,7 +1211,15 @@ function isNotEaten(meal) {
 export function flush(why) {
   if (flushing) return flushJob || Promise.resolve();
   flushing = true;
-  flushJob = flushOnce(why).finally(() => { flushing = false; flushJob = null; });
+  flushAgain = false;
+  flushJob = flushOnce(why).finally(() => {
+    flushing = false;
+    flushJob = null;
+    if (flushAgain) {
+      flushAgain = false;
+      flush(why).catch(() => {});
+    }
+  });
   return flushJob;
 }
 
@@ -1190,7 +1265,7 @@ async function flushOnce(why) {
       try {
         if (kind === 'ai') await runAiJob(job);
         else if (kind === 'gh-photo') await pushPhoto(job.photoId);
-        else if (kind === 'gh-day') await pushDay(job.date);
+        else if (kind === 'gh-day') await pushDay(job.date, job.id);
         else throw new NetError('ชนิดงานไม่รู้จัก: ' + kind);
         await db.completeJob(job.id);
         lastState = kind === 'ai' ? 'estimated' : 'sending';
