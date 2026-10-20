@@ -1157,6 +1157,21 @@
    ]
   },
   {
+   "id": "boss_craft_latte_500",
+   "name": "BOSS Craft ラテ (ลาเต้ BOSS)",
+   "unit": "1 ขวด 500 ml (ฉลาก 100 ml = 25 kcal · P 0.8)",
+   "kcal": 125,
+   "p": 4.0,
+   "fib": 0,
+   "src": "label",
+   "alias": [
+    "บอส",
+    "ลาเต้บอส",
+    "BOSS",
+    "กาแฟบอส"
+   ]
+  },
+  {
    "id": "georgia_latte_mutou_500",
    "name": "Georgia 深煎りラテ 無糖 (ลาเต้ไม่หวาน)",
    "unit": "1 ขวด 500 ml (ฉลาก 100 ml = 9 kcal · P 0.4)",
