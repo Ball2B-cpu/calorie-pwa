@@ -1,0 +1,67 @@
+<!doctype html>
+<html lang="th">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>ทดสอบเลือกรูป</title>
+<!-- หน้าทดสอบเปล่า (21 ต.ค.): ไม่มีโค้ดของแอพ ไม่ลงทะเบียน service worker ไม่ส่งรูปไปไหน
+     ใช้แยกว่า "เลือกรูปจากคลังแล้วค้าง" เป็นที่ Safari/iOS หรือที่โค้ดของแอพ -->
+<style>
+  :root{--ground:#F5F4F0;--card:#fff;--line:#E2DFD6;--ink:#16212B;--muted:#61747E;--ok:#2E6F6B;--bad:#A8563F}
+  @media (prefers-color-scheme:dark){:root{--ground:#14171A;--card:#1C2023;--line:#2C3135;--ink:#ECEAE4;--muted:#9BA5AA;--ok:#6FAFA7;--bad:#D3826A}}
+  body{margin:0;padding:16px;background:var(--ground);color:var(--ink);font:15px/1.5 -apple-system,system-ui,sans-serif}
+  h1{font-size:18px;margin:0 0 4px}
+  p{margin:0 0 14px;color:var(--muted);font-size:13px}
+  .t{background:var(--card);border:1px solid var(--line);border-radius:14px;padding:12px;margin-bottom:12px}
+  .t b{display:block;margin-bottom:6px}
+  .t small{display:block;color:var(--muted);margin-bottom:8px}
+  input{font-size:14px;max-width:100%}
+  .r{margin-top:8px;font-size:13px;white-space:pre-wrap;word-break:break-word}
+  .r.ok{color:var(--ok)}.r.bad{color:var(--bad)}
+  img{display:block;max-width:100%;max-height:160px;margin-top:8px;border-radius:8px}
+  #log{font:12px/1.4 ui-monospace,monospace;color:var(--muted);white-space:pre-wrap}
+</style>
+</head>
+<body>
+<h1>ทดสอบเลือกรูป</h1>
+<p>หน้านี้ไม่มีโค้ดของแอพเลย และไม่ส่งรูปไปไหน ลองกดเลือกรูปจากคลังทีละข้อ แล้วดูว่าข้อไหนรูปขึ้น ข้อไหนค้าง</p>
+
+<div class="t"><b>1 · เหมือนแอพตอนนี้</b><small>accept="image/*" · รูปเดียว</small>
+  <input type="file" accept="image/*" data-k="1"><div class="r"></div></div>
+<div class="t"><b>2 · หลายรูป</b><small>accept="image/*" multiple</small>
+  <input type="file" accept="image/*" multiple data-k="2"><div class="r"></div></div>
+<div class="t"><b>3 · ไม่จำกัดชนิดไฟล์</b><small>ไม่มี accept (iOS จะขึ้นเมนูให้เลือก "คลังรูปภาพ" หรือ "เลือกไฟล์")</small>
+  <input type="file" data-k="3"><div class="r"></div></div>
+<div class="t"><b>4 · รับ HEIC ตรง ๆ</b><small>accept="image/heic,image/heif,image/jpeg,image/png"</small>
+  <input type="file" accept="image/heic,image/heif,image/jpeg,image/png" data-k="4"><div class="r"></div></div>
+
+<div id="log"></div>
+<script>
+  var t0 = {};
+  var logEl = document.getElementById('log');
+  function log(s) { var d = new Date(); logEl.textContent = d.toTimeString().slice(0, 8) + ' ' + s + '\n' + logEl.textContent; }
+  document.querySelectorAll('input[type=file]').forEach(function (inp) {
+    var k = inp.dataset.k, out = inp.nextElementSibling;
+    inp.addEventListener('click', function () { t0[k] = Date.now(); out.className = 'r'; out.textContent = 'เปิดตัวเลือกรูปแล้ว… รอผล'; log('ข้อ ' + k + ' กดเลือก'); });
+    inp.addEventListener('cancel', function () { out.textContent = 'ยกเลิก'; log('ข้อ ' + k + ' ยกเลิก'); });
+    inp.addEventListener('change', function () {
+      var ms = t0[k] ? Date.now() - t0[k] : 0;
+      var fs = Array.prototype.slice.call(inp.files || []);
+      log('ข้อ ' + k + ' ได้ไฟล์ ' + fs.length + ' ไฟล์ หลัง ' + (ms / 1000).toFixed(1) + ' วิ');
+      if (!fs.length) { out.className = 'r bad'; out.textContent = 'ไม่ได้รับไฟล์'; return; }
+      out.className = 'r ok';
+      out.textContent = '✓ ได้รูป ' + fs.length + ' ไฟล์ หลัง ' + (ms / 1000).toFixed(1) + ' วิ\n' + fs.map(function (f) {
+        return f.name + ' · ' + (f.type || 'ไม่ระบุชนิด') + ' · ' + Math.round(f.size / 1024) + ' KB';
+      }).join('\n');
+      var old = out.querySelector('img'); if (old) old.remove();
+      var img = document.createElement('img');
+      img.onerror = function () { log('ข้อ ' + k + ' เปิดรูปในหน้าเว็บไม่ได้ (' + fs[0].type + ')'); };
+      img.src = URL.createObjectURL(fs[0]);
+      out.appendChild(img);
+    });
+  });
+  document.addEventListener('visibilitychange', function () { log('หน้า ' + (document.hidden ? 'ถูกซ่อน' : 'กลับมาแสดง')); });
+  log('พร้อม · ' + navigator.userAgent.replace(/^Mozilla\/5\.0 /, ''));
+</script>
+</body>
+</html>

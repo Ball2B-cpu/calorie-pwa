@@ -4,7 +4,7 @@
    - คำขอข้ามโดเมนอื่น (openrouter.ai / api.github.com) และคำขอที่ไม่ใช่ GET ไม่ถูกแตะเลย
      → ไม่มีทางได้คำตอบจากแคชมาหลอกว่าส่งสำเร็จ
    ⚠️ แก้ไฟล์ใดที่อยู่ใน SHELL ต้องเปลี่ยน VERSION ด้วยทุกครั้ง */
-const VERSION = 'cal-v58';
+const VERSION = 'cal-v59';
 const SHELL = [
   './',
   './index.html',
@@ -51,6 +51,9 @@ self.addEventListener('fetch', (e) => {
   const isFont = /fonts\.(googleapis|gstatic)\.com/.test(url.host);
 
   // หน้าเอกสาร: network-first — กันหน้าแรกค้างเวอร์ชันเก่า (ถ้าไม่มีเน็ตค่อยใช้ของในแคช)
+  // หน้าอื่นที่ไม่ใช่แอพ (เช่น picktest.html) ปล่อยผ่านเครือข่ายตรง ๆ — ห้ามเอาไปเก็บแทน index.html ในแคช
+  if (req.mode === 'navigate' && sameOrigin && !/\/(index\.html)?$/.test(url.pathname)) return;
+
   if (req.mode === 'navigate') {
     e.respondWith(
       fetch(req).then((res) => {
