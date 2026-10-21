@@ -11,7 +11,7 @@
    - สถิติเดือน/ขาดดุลสะสม/ค่าเฉลี่ย ใช้ final เท่านั้น · วัน est นับแยกว่า "ยังไม่ยืนยัน n วัน"
    - ผูก event ของปุ่มไว้ต้นฟังก์ชันเสมอ (บั๊ก 10 ก.ย.: ผูกท้ายสุด โค้ดกลางทางพัง = ปุ่มตาย)
    - id ต้องไม่ซ้ำกันทั้งหน้า (บั๊ก 10 ก.ย.: id="fNote" ซ้ำ 2 ที่ ทำให้ปุ่มเงียบทั้งฟอร์ม)
-   - รูป: ปุ่ม "เลือกรูป" = <input type="file" accept="image/*"> ไม่มี multiple · ปุ่ม "ถ่ายรูป" = input แยกที่มี capture
+   - รูป: ปุ่ม "เลือกรูป" = <input type="file" accept="image/heic,…,image/*"> ไม่มี multiple · ปุ่ม "ถ่ายรูป" = input แยกที่มี capture
      (21 ต.ค.: iOS ตัวเลือกรูปแบบหลายรูปค้างตอนกด ✓ — แบบรูปเดียวแตะแล้วปิดเลย ไม่ผ่านปุ่ม ✓)
      ห้ามใส่ capture ที่ input เลือกรูป — iOS จะบังคับกล้องอย่างเดียว เลือกจากคลังไม่ได้ · ห้ามใช้ getUserMedia */
 
@@ -1294,7 +1294,9 @@ function buildForm() {
 
     const pic = document.createElement('input');
     pic.type = 'file';
-    pic.accept = 'image/*';
+    // 21 ต.ค.: กล้องใช้ได้ แต่เลือกจากคลังแล้วตัวเลือกของ iOS ค้างตอนกด ✓ — ค้างตอน iOS แปลง HEIC→JPEG ให้
+    //   (Safari แปลงเฉพาะเมื่อ accept ไม่มีชนิด HEIC) → บอกว่ารับ HEIC ได้ ให้ส่งไฟล์เดิมมาเลย แล้วแอพย่อเป็น JPEG เอง
+    pic.accept = 'image/heic,image/heif,image/jpeg,image/png,image/*';
     pic.className = 'fpic';
     pic.id = 'fPic' + i;
     pic.setAttribute('aria-label', 'เลือกรูปมื้อ' + m.key);
