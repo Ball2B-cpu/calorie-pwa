@@ -1307,6 +1307,11 @@ function buildForm() {
     thumbs.id = 'fThumbs' + i;
     box.appendChild(thumbs);
 
+    const picMsg = el('div', 'fpicmsg');
+    picMsg.id = 'fPicMsg' + i;
+    picMsg.hidden = true;
+    box.appendChild(picMsg);
+
     box.addEventListener('click', (e) => {
       const b = e.target.closest('[data-add]');
       if (b && box.contains(b)) addChipText(i, b.dataset.add);
@@ -1555,42 +1560,67 @@ function collectMeals() {
   return out;
 }
 
-async function fileToSource(file) {
-  if (typeof createImageBitmap === 'function') {
-    try {
-      return await createImageBitmap(file, { imageOrientation: 'from-image' });
-    } catch (_) {
-      try { return await createImageBitmap(file); } catch (_) {}
-    }
-  }
+/* 21 ต.ค.: บอลเลือกรูปจากคลังแล้วกด ✓ จอนิ่ง ไม่มีอะไรเกิดขึ้น — ถอดรูป/toBlob บน iOS ค้างได้ไม่มีวันจบ
+   (รูปใหญ่ 24–48MP กินแรมจน WebKit ไม่ตอบ) → ทุกขั้นมีเวลาจำกัด + มีทางสำรอง + บอกสถานะใต้มื้อ */
+const PHOTO_STEP_MS = 20000;
+
+function withTimeout(promise, ms, what) {
+  let t = null;
+  return Promise.race([
+    promise,
+    new Promise((_, reject) => { t = setTimeout(() => reject(new Error(what + ' นานเกิน ' + Math.round(ms / 1000) + ' วิ')), ms); }),
+  ]).finally(() => clearTimeout(t));
+}
+
+async function imgFromFile(file) {
   const url = URL.createObjectURL(file);
   try {
     const img = new Image();
+    img.decoding = 'async';
+    const loaded = new Promise((resolve, reject) => {
+      img.onload = () => resolve();
+      img.onerror = () => reject(new Error('เปิดรูปไม่ได้'));
+    });
     img.src = url;
-    await img.decode();
+    await withTimeout(loaded, PHOTO_STEP_MS, 'เปิดรูป');
     return img;
   } finally {
-    URL.revokeObjectURL(url);
+    // revoke หลังวาดลง canvas เสร็จก็ได้ แต่ img ที่ load แล้วยังวาดได้ — คืนแรมเร็วที่สุด
+    setTimeout(() => URL.revokeObjectURL(url), 0);
+  }
+}
+
+async function fileToSource(file) {
+  const errs = [];
+  if (typeof createImageBitmap === 'function') {
+    try {
+      return await withTimeout(createImageBitmap(file, { imageOrientation: 'from-image' }), PHOTO_STEP_MS, 'ถอดรูป');
+    } catch (e) { errs.push(e); }
+  }
+  // ทางสำรอง: <img> (iOS ถอด HEIC/รูปใหญ่ผ่านทางนี้ได้แม้ createImageBitmap ไม่ไหว)
+  try {
+    return await imgFromFile(file);
+  } catch (e) {
+    errs.push(e);
+    throw new Error(errs.map((x) => x && x.message).filter(Boolean).join(' · ') || 'เปิดรูปไม่ได้');
   }
 }
 
 function canvasToBlob(canvas, quality) {
-  return new Promise((resolve, reject) => {
-    if (!canvas.toBlob) {
-      reject(new Error('รูปนี้ใช้ไม่ได้ ถ่ายใหม่'));
-      return;
-    }
+  const viaBlob = new Promise((resolve, reject) => {
+    if (!canvas.toBlob) { reject(new Error('ไม่มี toBlob')); return; }
     canvas.toBlob((blob) => resolve(blob), 'image/jpeg', quality);
+  });
+  return withTimeout(viaBlob, PHOTO_STEP_MS, 'แปลงรูป').catch(async () => {
+    // ทางสำรอง: dataURL → Blob (ช้ากว่าแต่ไม่ค้าง)
+    const url = canvas.toDataURL('image/jpeg', quality);
+    return (await fetch(url)).blob();
   });
 }
 
 async function compressPhoto(file) {
   let src = null;
-  try {
-    src = await fileToSource(file);
-  } catch (_) {
-    throw new Error('รูปนี้ใช้ไม่ได้ ถ่ายใหม่');
-  }
+  src = await fileToSource(file);   // error บอกสาเหตุจริง (ถอดรูป/เปิดรูป นานเกิน …) ให้เห็นใต้มื้อ
   try {
     const sw = src.width || src.naturalWidth || 0;
     const sh = src.height || src.naturalHeight || 0;
@@ -1613,7 +1643,7 @@ async function compressPhoto(file) {
       blob = await canvasToBlob(canvas, q);
       if (blob && blob.size <= PHOTO_MAX_BYTES) break;
     }
-    if (!blob || blob.size > PHOTO_MAX_BYTES) throw new Error('รูปนี้ใช้ไม่ได้ ถ่ายใหม่');
+    if (!blob || blob.size > PHOTO_MAX_BYTES) throw new Error('ย่อแล้วยังใหญ่เกิน 250 KB');
     return { blob, w: dw, h: dh, bytes: blob.size };
   } finally {
     if (src && typeof src.close === 'function') {
@@ -1675,23 +1705,53 @@ async function addPhoto(i, file) {
   mealPhotos[i].push(id);
 }
 
+/** ข้อความใต้มื้อ (ข้อความท้ายฟอร์มมองไม่เห็นตอนอยู่มื้อบน ๆ) */
+function sayPhoto(i, msg, err) {
+  const node = $('fPicMsg' + i);
+  if (!node) return;
+  node.textContent = msg || '';
+  node.hidden = !msg;
+  node.classList.toggle('err', !!err);
+}
+
 async function onPhotoFiles(i, input) {
   const files = Array.from((input && input.files) || []);
   if (input) input.value = '';
-  if (!files.length) return;
+  if (!files.length) {
+    sayPhoto(i, 'ไม่ได้รับรูปจากเครื่อง — ลองเลือกใหม่อีกครั้ง', true);
+    return;
+  }
+  // ขึ้นช่องรอทันที ให้รู้ว่าแอพรับรูปแล้ว
+  const host = $('fThumbs' + i);
+  const waits = files.map(() => {
+    const w = el('div', 'fthumb wait');
+    w.appendChild(el('span', 'pwait', 'กำลังย่อ…'));
+    if (host) host.appendChild(w);
+    return w;
+  });
+  sayPhoto(i, 'กำลังย่อรูป ' + files.length + ' ใบ…');
   sayForm('กำลังย่อรูป…');
-  let ok = 0, bad = 0;
+  let ok = 0;
+  const errs = [];
   for (const file of files) {
     try {
       await addPhoto(i, file);
       ok++;
-    } catch (_) {
-      bad++;
+    } catch (e) {
+      errs.push((e && e.message) || 'ไม่ทราบสาเหตุ');
+      console.warn('[photo]', file && file.type, file && file.size, e);
     }
   }
+  waits.forEach((w) => w.remove());
   await paintMealPhotos(i);
-  if (bad) sayForm('รูปนี้ใช้ไม่ได้ ถ่ายใหม่', true);
-  else sayForm(ok ? 'เก็บรูปแล้ว ' + ok + ' ใบ' : '');
+  if (errs.length) {
+    const why = [...new Set(errs)].join(' · ');
+    sayPhoto(i, (ok ? 'เก็บได้ ' + ok + ' ใบ · ' : '') + 'ใช้ไม่ได้ ' + errs.length + ' ใบ: ' + why, true);
+    sayForm('รูปนี้ใช้ไม่ได้ ถ่ายใหม่', true);
+  } else {
+    sayPhoto(i, '');
+    sayForm(ok ? 'เก็บรูปแล้ว ' + ok + ' ใบ' : '');
+  }
   if (ok) await writeForm(false, { quiet: true });
 }
 

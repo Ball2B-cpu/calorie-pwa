@@ -462,6 +462,13 @@ button{font:inherit;color:inherit}
 .fthumb img{width:100%;height:100%;object-fit:cover;display:block}
 .fthumb .pbadge{position:absolute;left:0;right:0;bottom:0;font-size:10px;font-weight:600;text-align:center;padding:2px 4px;color:#fff;background:color-mix(in srgb,var(--warn) 85%,transparent)}
 .fthumb .pbadge.ok{background:color-mix(in srgb,var(--eaten) 85%,transparent)}
+.fthumb.wait{display:flex;align-items:center;justify-content:center;animation:pwait 1.2s ease-in-out infinite}
+.fthumb .pwait{font-size:10.5px;color:var(--muted)}
+@keyframes pwait{50%{opacity:.55}}
+@media (prefers-reduced-motion:reduce){.fthumb.wait{animation:none}}
+.fpicmsg{font-size:11.5px;color:var(--muted)}
+.fpicmsg.err{color:var(--over)}
+.fpicmsg[hidden]{display:none}
 .fthumb .pdel{position:absolute;top:3px;right:3px;width:22px;height:22px;border:0;border-radius:7px;background:color-mix(in srgb,var(--over) 88%,transparent);color:#fff;font-size:14px;line-height:1;cursor:pointer;padding:0}
 .faddpic{border:1px dashed var(--line);background:transparent;color:var(--muted);border-radius:12px;padding:10px 12px;font:inherit;font-size:12.5px;font-weight:600;cursor:pointer}
 
