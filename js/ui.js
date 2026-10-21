@@ -1681,13 +1681,29 @@ async function compressPhoto(file) {
   }
 }
 
+const remotePhotoTried = new Set();   // ไม่ดึงรูปเดิมซ้ำทุกครั้งที่วาดฟอร์ม
+
 async function paintMealPhotos(i) {
   const host = $('fThumbs' + i);
   if (!host) return;
   host.textContent = '';
+  const date = $('fDate') && $('fDate').value;
   for (const id of mealPhotos[i] || []) {
     let p = null;
     try { p = await db.getPhoto(id); } catch (_) { p = null; }
+    // ไม่มีในเครื่อง = รูปที่ Claude เก็บเข้า repo ให้จากแชท → ดึงมาครั้งเดียว
+    if (!(p && p.blob) && date && !remotePhotoTried.has(id)) {
+      remotePhotoTried.add(id);
+      const wait = el('div', 'fthumb wait');
+      wait.appendChild(el('span', 'pwait', 'กำลังดึง…'));
+      host.appendChild(wait);
+      try { p = await net.fetchRemotePhoto(date, id, mealIds[i]); } catch (e) {
+        console.warn('[photo] remote', id, e);
+        p = null;
+        remotePhotoTried.delete(id);   // เน็ตล่ม/GitHub ไม่ตอบ → รอบหน้าลองใหม่ (404 จริงถึงจะจำว่าไม่มี)
+      }
+      wait.remove();
+    }
     const wrap = el('div', 'fthumb');
     if (p && p.blob) {
       const url = URL.createObjectURL(p.blob);
@@ -1697,7 +1713,7 @@ async function paintMealPhotos(i) {
       img.src = url;
       wrap.appendChild(img);
     } else {
-      wrap.appendChild(el('span', '', 'เสีย'));
+      wrap.appendChild(el('span', 'pwait', 'ไม่พบรูป'));
     }
     const uploaded = !!(p && p.uploaded);
     wrap.appendChild(el('div', 'pbadge' + (uploaded ? ' ok' : ''), uploaded ? 'ขึ้นแล้ว' : 'ยังไม่ขึ้น'));

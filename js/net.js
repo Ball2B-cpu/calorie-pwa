@@ -230,6 +230,13 @@ export function base64ToUtf8(b64) {
   return new TextDecoder().decode(bytes);
 }
 
+function base64ToBytes(b64) {
+  const bin = atob(String(b64 || '').replace(/\s/g, ''));
+  const bytes = new Uint8Array(bin.length);
+  for (let i = 0; i < bin.length; i++) bytes[i] = bin.charCodeAt(i);
+  return bytes;
+}
+
 export async function blobToBase64(blob) {
   const buf = await blob.arrayBuffer();
   return bytesToBase64(new Uint8Array(buf));
@@ -884,6 +891,27 @@ async function ghGet(repo, pat, path) {
     throw new NetError('GitHub ตอบไม่ใช่ JSON');
   }
   return data;
+}
+
+/** รูปที่ Claude รับจากแชทแล้วเก็บไว้ใน repo (photos/<date>/<id>.jpg) แต่เครื่องนี้ไม่มี → ดึงมาเก็บเป็น uploaded แล้ว
+    (21 ต.ค.: ตัวเลือกรูปของ iOS ค้างในเว็บแอพ บอลส่งรูปให้ Claude แทน — รูปต้องกลับมาโชว์ในแอพได้)
+    คืน record รูป · ไม่มีใน repo = null · ไม่มี key/ชื่อ repo = null (ไม่ throw: แค่โชว์ไม่ได้ ไม่ใช่ error) */
+export async function fetchRemotePhoto(date, id, mealId) {
+  const pat = ghPat(), repo = ghRepo();
+  if (!pat || !repo) return null;
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(String(date || '')) || !/^p_[a-z0-9]+$/.test(String(id || ''))) return null;
+  const path = `photos/${date}/${id}.jpg`;
+  const f = await ghGet(repo, pat, path);
+  if (!f || !f.content) return null;
+  const bytes = base64ToBytes(f.content);
+  const blob = new Blob([bytes], { type: 'image/jpeg' });
+  let w = 0, h = 0;
+  try {
+    const bmp = await createImageBitmap(blob);
+    w = bmp.width; h = bmp.height;
+    if (typeof bmp.close === 'function') bmp.close();
+  } catch (_) {}
+  return db.putPhoto({ id, date, mealId: mealId ?? null, blob, w, h, bytes: blob.size, uploaded: true, remotePath: path });
 }
 
 async function beforeGhWrite() {

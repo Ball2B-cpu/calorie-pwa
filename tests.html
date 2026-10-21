@@ -603,6 +603,34 @@ test('น้ำดื่ม water.log: แอพเท่านั้นที�
   assert(net.sameContent(pulled, { ...pushed }) && deepEqual(pulled.water, { log }), 'ดึงกลับต้องเหมือนเดิม');
 });
 
+test('รูปจาก repo: fetchRemotePhoto ดึง photos/<date>/<id>.jpg มาเก็บเป็น uploaded · 404/ไม่มี key = null (เพิ่ม 21 ต.ค.)', async () => {
+  const c = document.createElement('canvas'); c.width = 40; c.height = 30;
+  c.getContext('2d').fillRect(0, 0, 40, 30);
+  const jpg = await new Promise((r) => c.toBlob(r, 'image/jpeg', 0.8));
+  const b64 = await net.blobToBase64(jpg);
+  const hold = lsHold(['cal.gh_pat', 'cal.gh_repo']);
+  try {
+    localStorage.removeItem('cal.gh_pat'); localStorage.removeItem('cal.gh_repo');
+    assert((await net.fetchRemotePhoto('1999-01-02', 'p_rm1')) === null, 'ไม่มี key ต้องคืน null ไม่ throw');
+    localStorage.setItem('cal.gh_pat', 'dummy-pat-not-real-xxxxxx');
+    localStorage.setItem('cal.gh_repo', 'owner/cal-test-data');
+    const urls = [];
+    const rec = await withStubFetch(async (url) => {
+      urls.push(String(url));
+      if (String(url).includes('/photos/1999-01-02/p_rm1.jpg')) return jsonRes({ sha: 'x', encoding: 'base64', content: b64 }, 200);
+      return jsonRes({ message: 'Not Found' }, 404);
+    }, () => net.fetchRemotePhoto('1999-01-02', 'p_rm1', 'm_q'));
+    assert(rec && rec.uploaded === true && rec.remotePath === 'photos/1999-01-02/p_rm1.jpg' && rec.mealId === 'm_q', 'ต้องเก็บเป็นรูปที่ขึ้นแล้ว ได้ ' + JSON.stringify(rec && { u: rec.uploaded, r: rec.remotePath }));
+    assert(rec.w === 40 && rec.h === 30 && rec.bytes === jpg.size, `ขนาดต้องมาจากรูปจริง ได้ ${rec.w}x${rec.h} ${rec.bytes}`);
+    const got = await db.getPhoto('p_rm1');
+    assert(got && got.blob && got.blob.size === jpg.size, 'ต้องอ่านกลับจาก IndexedDB ได้');
+    assert(urls.length === 1 && /contents\/photos\/1999-01-02\/p_rm1\.jpg/.test(urls[0]), 'ต้องยิง GET ไฟล์รูปใน repo ครั้งเดียว ได้ ' + urls.join(','));
+    const none = await withStubFetch(async () => jsonRes({ message: 'Not Found' }, 404), () => net.fetchRemotePhoto('1999-01-02', 'p_none'));
+    assert(none === null, 'ไม่มีใน repo ต้องคืน null');
+    assert((await net.fetchRemotePhoto('1999-01-02', '../x')) === null, 'id แปลก ๆ ต้องไม่ยิงอะไร');
+  } finally { hold.restore(); }
+});
+
 /* น้ำดื่มกดรัวระหว่าง pushDay รอ network (บั๊ก 11 ต.ค.: กด +250 สามครั้ง เหลือแก้วเดียวทั้งในเครื่องและบน repo) */
 async function tapWater(date, ml) {   // ตรรกะเดียวกับ changeWater ใน ui.js
   const ex = await db.getDay(date);
