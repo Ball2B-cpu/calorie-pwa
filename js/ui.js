@@ -11,7 +11,9 @@
    - สถิติเดือน/ขาดดุลสะสม/ค่าเฉลี่ย ใช้ final เท่านั้น · วัน est นับแยกว่า "ยังไม่ยืนยัน n วัน"
    - ผูก event ของปุ่มไว้ต้นฟังก์ชันเสมอ (บั๊ก 10 ก.ย.: ผูกท้ายสุด โค้ดกลางทางพัง = ปุ่มตาย)
    - id ต้องไม่ซ้ำกันทั้งหน้า (บั๊ก 10 ก.ย.: id="fNote" ซ้ำ 2 ที่ ทำให้ปุ่มเงียบทั้งฟอร์ม)
-   - รูป: <input type="file" accept="image/*" multiple> (ห้ามใส่ capture — iOS จะบังคับกล้องอย่างเดียว เลือกจากคลังไม่ได้) ห้ามใช้ getUserMedia */
+   - รูป: ปุ่ม "เลือกรูป" = <input type="file" accept="image/*"> ไม่มี multiple · ปุ่ม "ถ่ายรูป" = input แยกที่มี capture
+     (21 ต.ค.: iOS ตัวเลือกรูปแบบหลายรูปค้างตอนกด ✓ — แบบรูปเดียวแตะแล้วปิดเลย ไม่ผ่านปุ่ม ✓)
+     ห้ามใส่ capture ที่ input เลือกรูป — iOS จะบังคับกล้องอย่างเดียว เลือกจากคลังไม่ได้ · ห้ามใช้ getUserMedia */
 
 import * as db from './db.js';
 import * as net from './net.js';
@@ -1293,15 +1295,27 @@ function buildForm() {
     const pic = document.createElement('input');
     pic.type = 'file';
     pic.accept = 'image/*';
-    pic.multiple = true;
     pic.className = 'fpic';
     pic.id = 'fPic' + i;
-    pic.setAttribute('aria-label', 'ถ่ายรูปมื้อ' + m.key);
+    pic.setAttribute('aria-label', 'เลือกรูปมื้อ' + m.key);
     box.appendChild(pic);
 
-    const addPic = el('button', 'faddpic', 'เพิ่มรูป / ถ่ายรูป');
+    const cam = document.createElement('input');
+    cam.type = 'file';
+    cam.accept = 'image/*';
+    cam.setAttribute('capture', 'environment');
+    cam.className = 'fpic';
+    cam.id = 'fCam' + i;
+    cam.setAttribute('aria-label', 'ถ่ายรูปมื้อ' + m.key);
+    box.appendChild(cam);
+
+    const picBtns = el('div', 'fpicbtns');
+    const addPic = el('button', 'faddpic', 'เลือกรูป');
     addPic.type = 'button';
-    box.appendChild(addPic);
+    const camBtn = el('button', 'faddpic', 'ถ่ายรูป');
+    camBtn.type = 'button';
+    picBtns.append(addPic, camBtn);
+    box.appendChild(picBtns);
 
     const thumbs = el('div', 'fthumbs');
     thumbs.id = 'fThumbs' + i;
@@ -1320,7 +1334,9 @@ function buildForm() {
     ta.addEventListener('input', () => onMealTyped(ta));
     ta.addEventListener('blur', () => setTimeout(hideSuggest, 180));
     addPic.addEventListener('click', () => pic.click());
+    camBtn.addEventListener('click', () => cam.click());
     pic.addEventListener('change', () => onPhotoFiles(i, pic));
+    cam.addEventListener('change', () => onPhotoFiles(i, cam));
 
     host.appendChild(box);
   });
