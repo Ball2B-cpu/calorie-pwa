@@ -1316,7 +1316,11 @@ function buildForm() {
     addPic.type = 'button';
     const camBtn = el('button', 'faddpic', 'ถ่ายรูป');
     camBtn.type = 'button';
-    picBtns.append(addPic, camBtn);
+    // 21 ต.ค.: ตัวเลือกรูปของ iOS ค้างทั้งแบบหลายรูป/รูปเดียว (ค้างก่อนส่งรูปมาถึงหน้าเว็บ แอพแก้ไม่ได้)
+    //   ทางเลี่ยง: ก๊อปรูปในแอพ Photos แล้วกดวางที่นี่ ไม่ผ่านตัวเลือกรูปเลย
+    const pasteBtn = el('button', 'faddpic', 'วางรูป');
+    pasteBtn.type = 'button';
+    picBtns.append(addPic, camBtn, pasteBtn);
     box.appendChild(picBtns);
 
     const thumbs = el('div', 'fthumbs');
@@ -1337,6 +1341,13 @@ function buildForm() {
     ta.addEventListener('blur', () => setTimeout(hideSuggest, 180));
     addPic.addEventListener('click', () => pic.click());
     camBtn.addEventListener('click', () => cam.click());
+    pasteBtn.addEventListener('click', () => pastePhoto(i));
+    ta.addEventListener('paste', (e) => {
+      const files = Array.from((e.clipboardData && e.clipboardData.files) || []).filter((f) => /^image\//.test(f.type));
+      if (!files.length) return;          // วางข้อความตามปกติ
+      e.preventDefault();
+      addPhotoFiles(i, files);
+    });
     pic.addEventListener('change', () => onPhotoFiles(i, pic));
     cam.addEventListener('change', () => onPhotoFiles(i, cam));
 
@@ -1739,6 +1750,39 @@ async function onPhotoFiles(i, input) {
     sayPhoto(i, 'ไม่ได้รับรูปจากเครื่อง — ลองเลือกใหม่อีกครั้ง', true);
     return;
   }
+  return addPhotoFiles(i, files);
+}
+
+/** ปุ่ม "วางรูป": อ่านรูปจากคลิปบอร์ด (ก๊อปจากแอพ Photos มาก่อน) — iOS จะขึ้นปุ่ม "วาง" ให้แตะยืนยัน */
+async function pastePhoto(i) {
+  if (!navigator.clipboard || typeof navigator.clipboard.read !== 'function') {
+    sayPhoto(i, 'เครื่องนี้วางรูปจากปุ่มไม่ได้ — แตะค้างในช่องพิมพ์แล้วเลือก "วาง" แทน', true);
+    return;
+  }
+  let items = [];
+  try {
+    items = await navigator.clipboard.read();
+  } catch (e) {
+    sayPhoto(i, 'อ่านคลิปบอร์ดไม่ได้ (' + ((e && e.name) || 'ไม่ทราบสาเหตุ') + ') — ลองแตะค้างในช่องพิมพ์แล้วเลือก "วาง"', true);
+    return;
+  }
+  const files = [];
+  for (const it of items) {
+    const type = (it.types || []).find((t) => /^image\//.test(t));
+    if (!type) continue;
+    try {
+      const blob = await it.getType(type);
+      files.push(new File([blob], 'paste.' + (type.split('/')[1] || 'png'), { type }));
+    } catch (_) {}
+  }
+  if (!files.length) {
+    sayPhoto(i, 'ในคลิปบอร์ดไม่มีรูป — เปิดแอพ Photos แตะค้างที่รูป → "ลอกแบบ" แล้วกลับมากดวางรูป', true);
+    return;
+  }
+  return addPhotoFiles(i, files);
+}
+
+async function addPhotoFiles(i, files) {
   // ขึ้นช่องรอทันที ให้รู้ว่าแอพรับรูปแล้ว
   const host = $('fThumbs' + i);
   const waits = files.map(() => {
