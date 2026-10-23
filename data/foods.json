@@ -1238,6 +1238,23 @@
    "g": 110
   },
   {
+   "id": "meiji_supercup_cookievanilla_200",
+   "name": "ไอติม meiji スーパーカップ クッキーバニラ",
+   "unit": "1 ถ้วย 200 ml (ฉลาก: 306 kcal · P 4.5 · F 16.0 · C 36.1 · เกลือ 0.24 g)",
+   "kcal": 306,
+   "p": 4.5,
+   "fib": 0,
+   "src": "label",
+   "alias": [
+    "ไอติม",
+    "ไอศกรีม",
+    "スーパーカップ",
+    "ซุปเปอร์คัพ",
+    "super cup"
+   ],
+   "g": 200
+  },
+  {
    "id": "khaomanngai_sauce_thaione",
    "name": "น้ำจิ้มข้าวมันไก่ เต้าเจี้ยว (カオマンガイのたれ · Thai One)",
    "unit": "100 g",
