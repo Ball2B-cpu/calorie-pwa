@@ -32,7 +32,7 @@ const STATE_LABEL = {
   error: 'ส่งไม่สำเร็จ',
   synced: 'ส่งครบแล้ว',
 };
-const DEFAULT_PROFILE = { limit: 2000, tdee: 2900, proteinGoal: 140, fiberGoal: 25, waterGoal: 3000, goalWeight: 87.5 };
+const DEFAULT_PROFILE = { limit: 2000, tdee: 2700, proteinGoal: 140, fiberGoal: 25, waterGoal: 3000, goalWeight: 87.5 };
 
 let foodsCatalog = null;
 let curDate = '';

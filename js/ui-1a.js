@@ -8,7 +8,7 @@ import * as ui from './ui.js';
 
 const $ = (id) => document.getElementById(id);
 const CIRC = 2 * Math.PI * 70;                 // r=70 ในวงแหวน index.html
-const DEFAULT_PROFILE = { limit: 2000, tdee: 2900, proteinGoal: 140, goalWeight: 87.5 };
+const DEFAULT_PROFILE = { limit: 2000, tdee: 2700, proteinGoal: 140, goalWeight: 87.5 };
 const DEFAULT_QUICK = ['quaker_oat', 'soymilk_mucho', 'pasco_chojuku', 'whey_reys_choco', 'egg', 'rice_scoop', 'chicken_boiled', 'veg_serve'];
 const PORTIONS = [0.5, 1, 1.5, 2];
 const MEAL_KEYS = ['เช้า', 'กลางวัน', 'ของว่าง', 'เย็น'];
