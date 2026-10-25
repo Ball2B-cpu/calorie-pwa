@@ -256,7 +256,7 @@ function finalOf(d) {
 
 function ceilOf(d) {
   const p = profile();
-  const burn = d && d.garmin ? num(d.garmin.burn) : null;
+  const burn = d && d.garmin && !d.garmin.partial ? num(d.garmin.burn) : null;
   return Math.min(p.tdee, burn ?? p.tdee);
 }
 
@@ -493,7 +493,7 @@ function paintGauge(d, eaten) {
   if (tickT) tickT.style.left = ceilPct + '%';
   if (tickTL) {
     tickTL.style.left = ceilPct + '%';
-    const burn = d && d.garmin ? num(d.garmin.burn) : null;
+    const burn = d && d.garmin && !d.garmin.partial ? num(d.garmin.burn) : null;
     tickTL.textContent = (burn != null && ceil === burn ? 'เผาจริง ' : 'TDEE ') + ceil.toLocaleString('en-US');
     tickTL.classList.remove('up');
     if (tight || ceilPct > 82) tickTL.style.transform = 'translateX(-100%)';

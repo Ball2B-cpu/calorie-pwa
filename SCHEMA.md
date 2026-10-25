@@ -42,7 +42,8 @@
 
   "garmin": {                      // 🤖 Claude เท่านั้น (ดึงจาก Garmin ผ่าน Chrome — แอพทำแทนไม่ได้)
     "burn": 2520, "rest": 2276, "active": 244, "steps": 8123,
-    "sleepScore": 78, "sleepHours": 6.5, "at": "2026-09-12T07:30:00+09:00"
+    "sleepScore": 78, "sleepHours": 6.5, "at": "2026-09-12T07:30:00+09:00",
+    "partial": true, "worn": "12:36–14:50, 17:26–18:34"   // ไม่บังคับ · ใส่นาฬิกาไม่ครบวัน → burn ไม่ใช้เป็นเพดานสี/ไม่นับใน trend_check
   },
 
   "meals": [{
@@ -139,7 +140,7 @@
 ```json
 { "limit": 2000, "tdee": 2700, "proteinGoal": 140, "fiberGoal": 25, "waterGoal": 3000, "goalWeight": 80 }
 ```
-เพดานตัดสินสีของวัน: `ceil = min(tdee, garmin.burn ?? tdee)` (เอาค่าที่เข้มกว่าเสมอ)
+เพดานตัดสินสีของวัน: `ceil = min(tdee, garmin.burn ?? tdee)` (เอาค่าที่เข้มกว่าเสมอ · `garmin.partial` = true → ไม่ใช้ burn)
 
 ## key/token — localStorage เท่านั้น (ห้ามลง IndexedDB ห้ามลงไฟล์ใน repo)
 `cal.or_key` · `cal.gh_pat` · `cal.gh_repo` · `cal.ai_models`
