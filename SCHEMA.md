@@ -137,7 +137,7 @@
 
 ## ค่าตั้งต้น — `profile.json` (อยู่ใน repo ส่วนตัว ไม่ใช่ repo โค้ด)
 ```json
-{ "limit": 2000, "tdee": 2700, "proteinGoal": 140, "fiberGoal": 25, "waterGoal": 3000, "goalWeight": 87.5 }
+{ "limit": 2000, "tdee": 2700, "proteinGoal": 140, "fiberGoal": 25, "waterGoal": 3000, "goalWeight": 80 }
 ```
 เพดานตัดสินสีของวัน: `ceil = min(tdee, garmin.burn ?? tdee)` (เอาค่าที่เข้มกว่าเสมอ)
 
