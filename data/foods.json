@@ -1267,6 +1267,20 @@
    "salt": 0.3
   },
   {
+   "id": "calbee_caramel_popcorn_50",
+   "name": "Calbee キャラメルポップコーン (ป๊อปคอร์นคาราเมล)",
+   "unit": "1 ถุง 50 g (ฉลาก: P 1.4–2.2 · F 10.7 · C 36.2 · fib 1.5–3.0)",
+   "kcal": 244,
+   "p": 1.8,
+   "fib": 2.2,
+   "src": "label",
+   "alias": [
+    "ป๊อปคอร์นคาราเมล",
+    "ป๊อปคอร์น",
+    "popcorn"
+   ]
+  },
+  {
    "id": "georgia_latte_mutou_500",
    "name": "Georgia 深煎りラテ 無糖 (ลาเต้ไม่หวาน)",
    "unit": "1 ขวด 500 ml (ฉลาก 100 ml = 9 kcal · P 0.4)",
